@@ -5,8 +5,18 @@ from app.backend import file_utils
 from term_extractor.model_lang_maps import SPACY_LANG_SUPPORT, NLTK_LANG_SUPPORT, LABSE_LANG_SUPPORT
 
 LANGUAGE_NAMES = {
-    'ar': 'Arabic', 'en': 'English', 'it': 'Italian',
-    'de': 'German', 'fr': 'French',
+    'ar': 'Arabic', 'ca': 'Catalan', 'zh': 'Chinese',
+    'hr': 'Croatian', 'cs': 'Czech', 'da': 'Danish',
+    'nl': 'Dutch', 'en': 'English', 'et': 'Estonian',
+    'fi': 'Finnish', 'fr': 'French', 'de': 'German',
+    'el': 'Greek', 'hu': 'Hungarian', 'id': 'Indonesian',
+    'it': 'Italian', 'ja': 'Japanese', 'ko': 'Korean',
+    'lv': 'Latvian', 'lt': 'Lithuanian', 'mk': 'Macedonian',
+    'ms': 'Malay', 'nb': 'Norwegian', 'pl': 'Polish',
+    'pt': 'Portuguese', 'ro': 'Romanian', 'ru': 'Russian',
+    'sl': 'Slovenian', 'es': 'Spanish', 'sv': 'Swedish',
+    'tl': 'Tagalog', 'tr': 'Turkish', 'uk': 'Ukrainian',
+    'vi': 'Vietnamese',
 }
 
 

@@ -444,18 +444,19 @@ const Editor = {
 
             sorted.forEach(([candTerm, data]) => {
                 const isSelected = term.target === candTerm;
-                const occRatio = data.count && term.count ? (data.count / term.count).toFixed(2) : (data.hits && term.count ? (data.hits / term.count).toFixed(2) : '-');
+                const occRatio = this._calcOccRatio(data, term.count);
                 const llmScore = data.llm_score !== undefined ? (data.llm_score * 100).toFixed(1) + '%' : '-';
                 const varCount = data.variants ? data.variants.reduce((n, v) => n + Object.keys(v).length, 0) : 0;
 
-                html += `<tr class="${isSelected ? 'cand-selected' : ''}" data-cand-term="${this._escAttr(candTerm)}">
+                // Use data-cand-key attribute; event listener attached after HTML insertion
+                html += `<tr class="${isSelected ? 'cand-selected' : ''}">
                     <td dir="auto" style="font-weight:600">${this._esc(candTerm)}${isSelected ? ' ✓' : ''}</td>
                     <td>${data.hits || '-'}</td>
                     <td>${occRatio}</td>
                     <td>${llmScore}</td>
                     <td>${data.points ? data.points.toFixed(1) : '-'}</td>
                     <td>${varCount > 0 ? varCount : '-'}</td>
-                    <td><button class="cand-select-btn ${isSelected ? 'selected' : ''}" onclick="Editor._selectCandidate('${this._escAttr(candTerm)}')">${isSelected ? 'Selected' : 'Select'}</button></td>
+                    <td><button class="cand-select-btn ${isSelected ? 'selected' : ''}" data-cand-key="${this._escAttr(candTerm)}">${isSelected ? 'Selected' : 'Select'}</button></td>
                 </tr>`;
 
                 // Variants
@@ -464,14 +465,14 @@ const Editor = {
                         Object.entries(varObj).forEach(([vTerm, vData]) => {
                             const vSelected = term.target === vTerm;
                             const vLlm = vData.llm_score !== undefined ? (vData.llm_score * 100).toFixed(1) + '%' : '-';
-                            html += `<tr class="cand-variant ${vSelected ? 'cand-selected' : ''}" data-cand-term="${this._escAttr(vTerm)}">
+                            html += `<tr class="cand-variant ${vSelected ? 'cand-selected' : ''}">
                                 <td dir="auto">↳ ${this._esc(vTerm)}${vSelected ? ' ✓' : ''}</td>
                                 <td>${vData.hits || '-'}</td>
                                 <td>-</td>
                                 <td>${vLlm}</td>
                                 <td>${vData.points ? vData.points.toFixed(1) : '-'}</td>
                                 <td><em style="color:var(--text-muted);font-size:11px">variant</em></td>
-                                <td><button class="cand-select-btn ${vSelected ? 'selected' : ''}" onclick="Editor._selectCandidate('${this._escAttr(vTerm)}')">${vSelected ? 'Selected' : 'Select'}</button></td>
+                                <td><button class="cand-select-btn ${vSelected ? 'selected' : ''}" data-cand-key="${this._escAttr(vTerm)}">${vSelected ? 'Selected' : 'Select'}</button></td>
                             </tr>`;
                         });
                     });
@@ -480,9 +481,21 @@ const Editor = {
 
             html += '</tbody></table>';
             body.innerHTML = html;
+
+            // Attach event listeners programmatically to avoid inline onclick handlers
+            body.querySelectorAll('.cand-select-btn[data-cand-key]').forEach(btn => {
+                btn.addEventListener('click', () => this._selectCandidate(btn.dataset.candKey));
+            });
         }
 
         DOM.show('modal-candidates');
+    },
+
+    // Calculate occurrence ratio from candidate data
+    _calcOccRatio(data, termCount) {
+        if (data.count && termCount) return (data.count / termCount).toFixed(2);
+        if (data.hits && termCount) return (data.hits / termCount).toFixed(2);
+        return '-';
     },
 
     _selectCandidate(candTerm) {
@@ -508,16 +521,34 @@ const Editor = {
         if (this.deletedTerms.length === 0) {
             body.innerHTML = '<p class="recycle-empty">Recycle bin is empty</p>';
         } else {
-            let html = '<ul class="recycle-list">';
+            const ul = document.createElement('ul');
+            ul.className = 'recycle-list';
             this.deletedTerms.forEach(d => {
-                html += `<li class="recycle-item">
-                    <span class="recycle-source" dir="auto">${this._esc(d.source || d.key)}</span>
-                    <span class="recycle-target" dir="auto">${this._esc(d.target || '')}</span>
-                    <button class="btn-restore" onclick="Editor._restoreTerm('${this._escAttr(d.key)}')">Restore</button>
-                </li>`;
+                const li = document.createElement('li');
+                li.className = 'recycle-item';
+
+                const srcSpan = document.createElement('span');
+                srcSpan.className = 'recycle-source';
+                srcSpan.dir = 'auto';
+                srcSpan.textContent = d.source || d.key;
+
+                const tarSpan = document.createElement('span');
+                tarSpan.className = 'recycle-target';
+                tarSpan.dir = 'auto';
+                tarSpan.textContent = d.target || '';
+
+                const restoreBtn = document.createElement('button');
+                restoreBtn.className = 'btn-restore';
+                restoreBtn.textContent = 'Restore';
+                restoreBtn.addEventListener('click', () => this._restoreTerm(d.key));
+
+                li.appendChild(srcSpan);
+                li.appendChild(tarSpan);
+                li.appendChild(restoreBtn);
+                ul.appendChild(li);
             });
-            html += '</ul>';
-            body.innerHTML = html;
+            body.innerHTML = '';
+            body.appendChild(ul);
         }
         DOM.show('modal-recycle');
     },
@@ -693,6 +724,7 @@ const Editor = {
     },
 
     _escAttr(str) {
-        return String(str || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+        // Escape backslashes first, then quotes, to prevent attribute injection
+        return String(str || '').replace(/\\/g, '&#92;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     }
 };
