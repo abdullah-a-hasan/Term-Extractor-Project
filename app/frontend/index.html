@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Term Extractor</title>
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Header -->
+        <header id="app-header">
+            <div class="header-brand">
+                <span class="header-icon">⚙</span>
+                <span class="header-title">Term Extractor</span>
+            </div>
+            <nav class="header-steps">
+                <div class="step-item" id="nav-step-1" data-view="setup">
+                    <span class="step-num">1</span>
+                    <span class="step-label">Setup</span>
+                </div>
+                <div class="step-divider">›</div>
+                <div class="step-item" id="nav-step-2" data-view="progress">
+                    <span class="step-num">2</span>
+                    <span class="step-label">Extraction</span>
+                </div>
+                <div class="step-divider">›</div>
+                <div class="step-item" id="nav-step-3" data-view="editor">
+                    <span class="step-num">3</span>
+                    <span class="step-label">Review Terms</span>
+                </div>
+            </nav>
+            <div class="header-actions">
+                <button class="btn btn-ghost" id="btn-load-json" title="Open existing JSON result file">
+                    📂 Open JSON
+                </button>
+            </div>
+        </header>
+
+        <!-- Main content area -->
+        <main id="main-content">
+            <!-- View 1: Setup -->
+            <div id="view-setup" class="view active">
+                <div class="view-container">
+                    <div class="view-header">
+                        <h1>Configure Extraction</h1>
+                        <p class="view-subtitle">Set up your CSV file, language pair, and extraction parameters</p>
+                    </div>
+
+                    <div class="setup-layout">
+                        <!-- Left: Main config -->
+                        <div class="setup-main">
+                            <!-- File Selection Card -->
+                            <div class="card">
+                                <div class="card-header">
+                                    <h2 class="card-title">📁 File Selection</h2>
+                                </div>
+                                <div class="card-body">
+                                    <div class="form-group">
+                                        <label class="form-label" for="csv-path">
+                                            Bilingual CSV File <span class="required">*</span>
+                                            <span class="tooltip" data-tip="A CSV file with two columns: source text and target text">ⓘ</span>
+                                        </label>
+                                        <div class="input-group">
+                                            <input type="text" id="csv-path" class="form-control" placeholder="Select a CSV file..." readonly>
+                                            <button class="btn btn-secondary" id="btn-browse-csv">Browse</button>
+                                        </div>
+                                        <div id="csv-preview" class="csv-preview hidden"></div>
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label" for="output-dir">
+                                            Output Directory <span class="required">*</span>
+                                        </label>
+                                        <div class="input-group">
+                                            <input type="text" id="output-dir" class="form-control" placeholder="Select output folder..." readonly>
+                                            <button class="btn btn-secondary" id="btn-browse-output">Browse</button>
+                                        </div>
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label" for="pred-terms-path">
+                                            Predefined Terms File
+                                            <span class="optional">(optional)</span>
+                                            <span class="tooltip" data-tip="Optional .txt file with one term per line to restrict source term extraction">ⓘ</span>
+                                        </label>
+                                        <div class="input-group">
+                                            <input type="text" id="pred-terms-path" class="form-control" placeholder="No file selected">
+                                            <button class="btn btn-secondary" id="btn-browse-pred-terms">Browse</button>
+                                            <button class="btn btn-ghost btn-icon" id="btn-clear-pred-terms" title="Clear">✕</button>
+                                        </div>
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label" for="output-name">
+                                            Output File Name
+                                        </label>
+                                        <div class="input-group">
+                                            <input type="text" id="output-name" class="form-control" value="extracted_terms" placeholder="extracted_terms">
+                                            <span class="input-suffix">.xlsx</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Language Pair Card -->
+                            <div class="card">
+                                <div class="card-header">
+                                    <h2 class="card-title">🌐 Language Pair</h2>
+                                </div>
+                                <div class="card-body">
+                                    <div class="form-row">
+                                        <div class="form-group flex-1">
+                                            <label class="form-label" for="src-lang">Source Language <span class="required">*</span></label>
+                                            <select id="src-lang" class="form-control">
+                                                <option value="">Loading...</option>
+                                            </select>
+                                        </div>
+                                        <div class="lang-arrow">→</div>
+                                        <div class="form-group flex-1">
+                                            <label class="form-label" for="tar-lang">Target Language <span class="required">*</span></label>
+                                            <select id="tar-lang" class="form-control">
+                                                <option value="">Loading...</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Extraction Method Card -->
+                            <div class="card">
+                                <div class="card-header">
+                                    <h2 class="card-title">⚙ Extraction Method</h2>
+                                </div>
+                                <div class="card-body">
+                                    <div class="radio-group">
+                                        <label class="radio-item" id="radio-spacy-label">
+                                            <input type="radio" name="extraction-method" value="spacy" id="radio-spacy">
+                                            <span class="radio-icon">🔬</span>
+                                            <div class="radio-text">
+                                                <strong>spaCy (NLP-based)</strong>
+                                                <small>Better accuracy for supported languages; extracts noun phrases</small>
+                                            </div>
+                                        </label>
+                                        <label class="radio-item">
+                                            <input type="radio" name="extraction-method" value="ngrams" id="radio-ngrams" checked>
+                                            <span class="radio-icon">📝</span>
+                                            <div class="radio-text">
+                                                <strong>N-grams</strong>
+                                                <small>Works with all languages; extracts all word combinations</small>
+                                            </div>
+                                        </label>
+                                    </div>
+                                    <div id="spacy-warning" class="alert alert-warning hidden">
+                                        ⚠ spaCy is not available for the selected source language. Using n-grams.
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Right: Advanced settings -->
+                        <div class="setup-sidebar">
+                            <div class="card">
+                                <div class="card-header card-header-collapsible" id="advanced-toggle">
+                                    <h2 class="card-title">🔧 Advanced Settings</h2>
+                                    <span class="collapse-icon">▼</span>
+                                </div>
+                                <div class="card-body" id="advanced-settings">
+                                    <div class="form-section-title">Frequency Thresholds</div>
+                                    <div class="form-group">
+                                        <label class="form-label">
+                                            Min Source Repetitions
+                                            <span class="tooltip" data-tip="Minimum times a source term must appear to be considered">ⓘ</span>
+                                        </label>
+                                        <input type="number" id="min-source-rep" class="form-control" value="5" min="1">
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label">
+                                            Max Source Repetitions
+                                            <span class="tooltip" data-tip="Maximum count for a source term (avoids over-computation on common words)">ⓘ</span>
+                                        </label>
+                                        <input type="number" id="max-source-rep" class="form-control" value="30" min="1">
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label">
+                                            Target Dismiss Threshold
+                                            <span class="tooltip" data-tip="If a target term doesn't appear after source occurs this many times, it's dismissed">ⓘ</span>
+                                        </label>
+                                        <input type="number" id="target-dismiss" class="form-control" value="5" min="1">
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label">
+                                            Min Count Ratio
+                                            <span class="tooltip" data-tip="Minimum ratio of target occurrences to source occurrences (0.0–1.0)">ⓘ</span>
+                                        </label>
+                                        <input type="number" id="min-count-ratio" class="form-control" value="0.4" min="0" max="1" step="0.05">
+                                    </div>
+
+                                    <div class="form-section-title">NLP Parameters</div>
+                                    <div class="form-group">
+                                        <label class="form-label">
+                                            Grouping Levenshtein Similarity
+                                            <span class="tooltip" data-tip="Minimum similarity for grouping variant target phrases (0.0–1.0)">ⓘ</span>
+                                        </label>
+                                        <input type="number" id="grouping-min-lev-sim" class="form-control" value="0.7" min="0" max="1" step="0.05">
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label">
+                                            Max Sentence Length
+                                            <span class="tooltip" data-tip="Maximum character length of sentences to consider">ⓘ</span>
+                                        </label>
+                                        <input type="number" id="max-sentence-length" class="form-control" value="300" min="50">
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label">
+                                            Max Translation Pairs
+                                            <span class="tooltip" data-tip="Maximum number of translation pairs to process (0 = unlimited)">ⓘ</span>
+                                        </label>
+                                        <input type="number" id="max-translation-pairs" class="form-control" value="0" min="0">
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label">
+                                            Skip Top Common Words
+                                            <span class="tooltip" data-tip="Skip the top N most frequent words in the source language">ⓘ</span>
+                                        </label>
+                                        <input type="number" id="skip-top-common-words" class="form-control" value="10000" min="0">
+                                    </div>
+                                    <div class="form-group form-toggle">
+                                        <label class="form-label">
+                                            Skip Peripheral Stop Words
+                                            <span class="tooltip" data-tip="Skip n-grams that begin or end with stop words">ⓘ</span>
+                                        </label>
+                                        <label class="toggle">
+                                            <input type="checkbox" id="skip-peri-stop-words" checked>
+                                            <span class="toggle-slider"></span>
+                                        </label>
+                                    </div>
+
+                                    <div class="form-section-title">LLM Settings</div>
+                                    <div class="form-group">
+                                        <label class="form-label">
+                                            Embedding Model
+                                            <span class="tooltip" data-tip="Sentence transformer model for semantic scoring">ⓘ</span>
+                                        </label>
+                                        <select id="model" class="form-control">
+                                            <option value="LaBSE">LaBSE</option>
+                                            <option value="intfloat/multilingual-e5-base">intfloat/multilingual-e5-base</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group form-toggle">
+                                        <label class="form-label">
+                                            LLM Scoring
+                                            <span class="tooltip" data-tip="Use LLM embeddings to re-score and rank candidates (slower but more accurate)">ⓘ</span>
+                                        </label>
+                                        <label class="toggle">
+                                            <input type="checkbox" id="llm-scoring" checked>
+                                            <span class="toggle-slider"></span>
+                                        </label>
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label">
+                                            Min LLM Score
+                                            <span class="tooltip" data-tip="Minimum LLM similarity score for cleanup (0.0–1.0)">ⓘ</span>
+                                        </label>
+                                        <input type="number" id="min-llm-score" class="form-control" value="0.4" min="0" max="1" step="0.05">
+                                    </div>
+                                    <div class="form-group form-toggle">
+                                        <label class="form-label">
+                                            Enable Partial Points
+                                            <span class="tooltip" data-tip="(Experimental) Allow longer terms to gain partial points from shorter high-scoring sub-terms">ⓘ</span>
+                                        </label>
+                                        <label class="toggle">
+                                            <input type="checkbox" id="enable-partial-points">
+                                            <span class="toggle-slider"></span>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Quick help -->
+                            <div class="card card-info">
+                                <div class="card-body">
+                                    <h3 class="card-title">💡 Quick Tips</h3>
+                                    <ul class="tips-list">
+                                        <li>Use a CSV file with two columns: source and target text (one sentence pair per row)</li>
+                                        <li>For best results, use at least 10,000 translation pairs</li>
+                                        <li>spaCy extraction is more precise but only supports select languages</li>
+                                        <li>LLM scoring is more accurate but significantly slower</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Action bar -->
+                    <div class="action-bar">
+                        <div id="setup-validation-msg" class="validation-msg hidden"></div>
+                        <button class="btn btn-primary btn-large" id="btn-start-extraction">
+                            ▶ Start Extraction
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- View 2: Progress -->
+            <div id="view-progress" class="view">
+                <div class="view-container">
+                    <div class="view-header">
+                        <h1>Extracting Terms</h1>
+                        <p class="view-subtitle">Please wait while the extraction pipeline runs...</p>
+                    </div>
+
+                    <div class="progress-layout">
+                        <!-- Step indicators -->
+                        <div class="card steps-card">
+                            <div class="card-body">
+                                <div class="pipeline-steps" id="pipeline-steps">
+                                    <!-- Steps populated by JS -->
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Main progress -->
+                        <div class="card progress-card">
+                            <div class="card-body">
+                                <div class="progress-header">
+                                    <span id="progress-label">Initializing...</span>
+                                    <span id="progress-pct">0%</span>
+                                </div>
+                                <div class="progress-bar-container">
+                                    <div class="progress-bar" id="main-progress-bar" style="width: 0%"></div>
+                                </div>
+                                <div class="progress-meta">
+                                    <span id="elapsed-time">⏱ 0s</span>
+                                    <span id="terms-found" class="hidden">📋 <span id="terms-found-count">0</span> terms found</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Log -->
+                        <div class="card log-card">
+                            <div class="card-header">
+                                <h3 class="card-title">📋 Log</h3>
+                                <button class="btn btn-ghost btn-sm" id="btn-clear-log">Clear</button>
+                            </div>
+                            <div class="card-body">
+                                <div id="log-output" class="log-output"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Completion card -->
+                    <div id="completion-card" class="card completion-card hidden">
+                        <div class="card-body">
+                            <div class="completion-icon">✅</div>
+                            <h2>Extraction Complete!</h2>
+                            <p id="completion-summary"></p>
+                            <div class="completion-actions">
+                                <button class="btn btn-secondary" id="btn-back-to-setup">← Back to Setup</button>
+                                <button class="btn btn-primary btn-large" id="btn-review-terms">Review Terms →</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Error card -->
+                    <div id="error-card" class="card error-card hidden">
+                        <div class="card-body">
+                            <div class="completion-icon">❌</div>
+                            <h2>Extraction Failed</h2>
+                            <p id="error-message"></p>
+                            <button class="btn btn-secondary" id="btn-back-to-setup-error">← Back to Setup</button>
+                        </div>
+                    </div>
+
+                    <!-- Cancel button -->
+                    <div class="action-bar">
+                        <button class="btn btn-danger" id="btn-cancel-extraction">✕ Cancel</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- View 3: Term Editor -->
+            <div id="view-editor" class="view">
+                <div id="editor-loading" class="loading-overlay">
+                    <div class="loading-spinner"></div>
+                    <p>Loading terms...</p>
+                </div>
+                <div id="editor-content" class="hidden">
+                    <!-- Stats bar -->
+                    <div id="stats-bar" class="stats-bar">
+                        <div class="stat-item">
+                            <span class="stat-label">Total</span>
+                            <span class="stat-value" id="stat-total">0</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Active</span>
+                            <span class="stat-value stat-active" id="stat-active">0</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Edited</span>
+                            <span class="stat-value stat-edited" id="stat-edited">0</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Confirmed</span>
+                            <span class="stat-value stat-confirmed" id="stat-confirmed">0</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Deleted</span>
+                            <span class="stat-value stat-deleted" id="stat-deleted">0</span>
+                        </div>
+                        <div class="stat-progress">
+                            <div class="stat-progress-bar" id="stat-progress-bar"></div>
+                        </div>
+                        <span id="stat-progress-pct" class="stat-progress-pct">0%</span>
+                        <div class="stats-actions">
+                            <span id="autosave-indicator" class="autosave-indicator">✓ Saved</span>
+                        </div>
+                    </div>
+
+                    <!-- Toolbar -->
+                    <div id="editor-toolbar" class="editor-toolbar">
+                        <div class="toolbar-filters">
+                            <div class="filter-group">
+                                <input type="text" id="filter-source" class="form-control filter-input" placeholder="Filter source...">
+                                <input type="text" id="filter-target" class="form-control filter-input" placeholder="Filter target...">
+                                <label class="toggle-small" title="Enable regex for filters">
+                                    <input type="checkbox" id="filter-regex">
+                                    <span class="toggle-slider-small"></span>
+                                    <span>Regex</span>
+                                </label>
+                            </div>
+                            <div class="filter-group">
+                                <select id="filter-status" class="form-control filter-select">
+                                    <option value="all">All</option>
+                                    <option value="edited">Edited</option>
+                                    <option value="unedited">Unedited</option>
+                                    <option value="confirmed">Confirmed</option>
+                                    <option value="unconfirmed">Unconfirmed</option>
+                                </select>
+                                <select id="per-page" class="form-control filter-select">
+                                    <option value="20">20/page</option>
+                                    <option value="50" selected>50/page</option>
+                                    <option value="100">100/page</option>
+                                    <option value="200">200/page</option>
+                                    <option value="500">500/page</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="toolbar-actions">
+                            <button class="btn btn-secondary btn-sm" id="btn-open-recycle">🗑 Deleted (<span id="recycle-count">0</span>)</button>
+                            <button class="btn btn-secondary btn-sm" id="btn-export-confirmed">📥 Export Confirmed</button>
+                            <button class="btn btn-secondary btn-sm" id="btn-export-all">📥 Export All</button>
+                            <button class="btn btn-ghost btn-sm" id="btn-load-json-editor">📂 Open JSON</button>
+                        </div>
+                    </div>
+
+                    <!-- Table -->
+                    <div id="table-container" class="table-container">
+                        <table id="terms-table" class="terms-table">
+                            <thead>
+                                <tr>
+                                    <th class="col-num">#</th>
+                                    <th class="col-source">Source Term</th>
+                                    <th class="col-target">Target Term</th>
+                                    <th class="col-count">Count</th>
+                                    <th class="col-actions">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="terms-tbody">
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Pagination -->
+                    <div id="pagination-bar" class="pagination-bar">
+                        <button class="btn btn-ghost btn-sm" id="btn-prev-page">‹ Prev</button>
+                        <span id="pagination-info">Page 1 of 1</span>
+                        <button class="btn btn-ghost btn-sm" id="btn-next-page">Next ›</button>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Candidates Modal -->
+    <div id="modal-candidates" class="modal hidden">
+        <div class="modal-backdrop" id="modal-candidates-backdrop"></div>
+        <div class="modal-dialog modal-large">
+            <div class="modal-header">
+                <h3>Candidates for: <em id="modal-src-term"></em></h3>
+                <button class="modal-close" id="modal-candidates-close">✕</button>
+            </div>
+            <div class="modal-body" id="modal-candidates-body">
+            </div>
+        </div>
+    </div>
+
+    <!-- Recycle Bin Modal -->
+    <div id="modal-recycle" class="modal hidden">
+        <div class="modal-backdrop" id="modal-recycle-backdrop"></div>
+        <div class="modal-dialog">
+            <div class="modal-header">
+                <h3>🗑 Recycle Bin</h3>
+                <button class="modal-close" id="modal-recycle-close">✕</button>
+            </div>
+            <div class="modal-body" id="modal-recycle-body">
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast notification -->
+    <div id="toast" class="toast hidden"></div>
+
+    <!-- Scripts -->
+    <script src="js/utils/dom.js"></script>
+    <script src="js/utils/api.js"></script>
+    <script src="js/views/setup.js"></script>
+    <script src="js/views/progress.js"></script>
+    <script src="js/views/editor.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>

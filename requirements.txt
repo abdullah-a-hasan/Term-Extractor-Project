@@ -5,3 +5,4 @@ sentence-transformers>=5.4.0
 hf_xet>=1.4.3
 openpyxl==3.1.5
 wordfreq==3.1.1
+pywebview>=5.0
