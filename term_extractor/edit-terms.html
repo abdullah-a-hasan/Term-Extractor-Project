@@ -1,0 +1,2143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bilingual Terminology Editor</title>
+    
+    <!-- External Library: SheetJS for Excel export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    
+    <style>
+        /* ========================================
+           GLOBAL STYLES
+           ======================================== */
+        * {
+            box-sizing: border-box;
+            font-family: Tahoma, sans-serif;
+        }
+        
+        body {
+            margin: 0;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        
+        /* ========================================
+           MAIN CONTAINER
+           ======================================== */
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        h1 {
+            margin: 0 0 20px 0;
+            color: #333;
+            font-size: 24px;
+        }
+        
+        /* ========================================
+           FILE UPLOAD AREA
+           ======================================== */
+        .file-upload {
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #f9f9f9;
+            border: 2px dashed #ddd;
+            border-radius: 6px;
+            text-align: center;
+        }
+        
+        .file-upload input {
+            display: none;
+        }
+        
+        .file-upload label {
+            display: inline-block;
+            padding: 10px 20px;
+            background: #007bff;
+            color: white;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        
+        .file-upload label:hover {
+            background: #0056b3;
+        }
+        
+        .file-info {
+            margin-top: 10px;
+            color: #666;
+            font-size: 14px;
+        }
+        
+        /* ========================================
+           NAVIGATION/PAGINATION CONTROLS
+           ======================================== */
+        .navigation {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px;
+            background: #f0f0f0;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        
+        .navigation.bottom {
+            margin-top: 20px;
+            margin-bottom: 0;
+        }
+        
+        .nav-controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        
+        .nav-info {
+            font-size: 14px;
+            color: #666;
+            white-space: nowrap;
+        }
+        
+        /* ========================================
+           BUTTONS
+           ======================================== */
+        button {
+            padding: 8px 16px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.3s;
+        }
+        
+        button:hover:not(:disabled) {
+            background: #0056b3;
+        }
+        
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        
+        /* Delete button variant */
+        button.delete {
+            background: #dc3545;
+        }
+        
+        button.delete:hover:not(:disabled) {
+            background: #c82333;
+        }
+        
+        /* Restore button variant */
+        button.restore {
+            background: #28a745;
+            padding: 8px 20px;
+            font-size: 14px;
+        }
+        
+        button.restore:hover {
+            background: #218838;
+        }
+        
+        /* Notification badge for buttons */
+        .btn-badge {
+            display: inline-block;
+            padding: 2px 6px;
+            margin-left: 5px;
+            background: #dc3545;
+            color: white;
+            border-radius: 10px;
+            font-size: 11px;
+            font-weight: 600;
+            vertical-align: middle;
+        }
+        
+        /* Export dropdown container */
+        .export-dropdown {
+            position: relative;
+            display: inline-block;
+        }
+        
+        .export-dropdown-content {
+            display: none;
+            position: absolute;
+            right: 0;
+            bottom: 100%;
+            margin-bottom: 5px;
+            background-color: white;
+            min-width: 180px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+            border-radius: 4px;
+            z-index: 1000;
+            border: 1px solid #dee2e6;
+        }
+        
+        .export-dropdown-content button {
+            width: 100%;
+            text-align: left;
+            padding: 10px 16px;
+            background: white;
+            color: #333;
+            border: none;
+            border-radius: 0;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+        
+        .export-dropdown-content button:first-child {
+            border-top-left-radius: 4px;
+            border-top-right-radius: 4px;
+        }
+        
+        .export-dropdown-content button:last-child {
+            border-bottom-left-radius: 4px;
+            border-bottom-right-radius: 4px;
+        }
+        
+        .export-dropdown-content button:hover {
+            background: #f8f9fa;
+        }
+        
+        .export-dropdown.show .export-dropdown-content {
+            display: block;
+        }
+        
+        /* ========================================
+           FORM INPUTS
+           ======================================== */
+        select {
+            font-family: Tahoma, sans-serif;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        
+        select:focus {
+            outline: none;
+            border-color: #007bff;
+        }
+        
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #007bff;
+            box-shadow: 0 0 0 2px rgba(0,123,255,0.1);
+        }
+        
+        input[type="checkbox"] {
+            accent-color: #007bff;
+        }
+        
+        /* ========================================
+           TERMS TABLE
+           ======================================== */
+        .terms-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        
+        .terms-table thead {
+            background: #e9ecef;
+        }
+        
+        .terms-table th {
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+            border-bottom: 2px solid #dee2e6;
+        }
+        
+        .terms-table td {
+            padding: 10px;
+            border-bottom: 1px solid #dee2e6;
+            vertical-align: top;
+        }
+        
+        /* Row states */
+        .terms-table tr.active {
+            background: #e3f2fd;
+        }
+        
+        .terms-table tr:hover {
+            background: #f8f9fa;
+        }
+        
+        .terms-table tr.active:hover {
+            background: #bbdefb;
+        }
+        
+        /* Edited row indicator */
+        .edited-row {
+            border-left: 3px solid #ffc107;
+        }
+        
+        /* ========================================
+           TABLE INPUTS & BUTTONS
+           ======================================== */
+        .term-input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            font-size: 14px;
+            font-family: Tahoma, sans-serif;
+        }
+        
+        .term-input:focus {
+            outline: none;
+            border-color: #007bff;
+            box-shadow: 0 0 0 2px rgba(0,123,255,0.1);
+        }
+        
+        .candidate-btn {
+            padding: 6px 10px;
+            background: #6c757d;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 15px;
+            white-space: nowrap;
+        }
+        
+        .candidate-btn:hover {
+            background: #5a6268;
+        }
+        
+        .action-cell {
+            text-align: center;
+            white-space: nowrap;
+        }
+        
+        .delete-btn {
+            padding: 6px 12px;
+            background: #dc3545;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+        
+        .delete-btn:hover {
+            background: #c82333;
+        }
+        
+        .confirm-btn {
+            padding: 6px 12px;
+            background: #6c757d;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background 0.3s;
+        }
+        
+        .confirm-btn:hover {
+            background: #5a6268;
+        }
+        
+        .confirm-btn.confirmed {
+            background: #28a745;
+        }
+        
+        .confirm-btn.confirmed:hover {
+            background: #218838;
+        }
+        
+        /* ========================================
+           MODAL STYLES
+           ======================================== */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+        }
+        
+        .modal.show {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .modal-content {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            max-width: 800px;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+        }
+        
+        /* Wider modal for recycle bin */
+        #recycleBinModal .modal-content {
+            max-width: 900px;
+            padding: 30px;
+        }
+        
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #dee2e6;
+        }
+        
+        .modal-header h2 {
+            margin: 0;
+            font-size: 22px;
+            color: #333;
+        }
+        
+        .close-btn {
+            background: #6c757d;
+            font-size: 20px;
+            width: 30px;
+            height: 30px;
+            padding: 0;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .close-btn:hover {
+            background: #5a6268;
+        }
+        
+        /* ========================================
+           CANDIDATE LIST (in modal)
+           ======================================== */
+        .candidate-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        
+        .candidate-item {
+            padding: 12px;
+            margin-bottom: 8px;
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .candidate-item:hover {
+            background: #e9ecef;
+            border-color: #007bff;
+        }
+        
+        .candidate-term {
+            font-weight: 600;
+            font-size: 15px;
+            margin-bottom: 4px;
+        }
+        
+        .candidate-stats {
+            font-size: 12px;
+            color: #666;
+            display: flex;
+            gap: 15px;
+        }
+        
+        /* ========================================
+           RECYCLE BIN (in modal)
+           ======================================== */
+        .recycle-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+        
+        .recycle-item {
+            padding: 16px 20px;
+            margin-bottom: 12px;
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 20px;
+            transition: all 0.2s;
+        }
+        
+        .recycle-item:hover {
+            background: #e9ecef;
+            border-color: #adb5bd;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .recycle-term {
+            font-weight: 600;
+            font-size: 15px;
+            flex: 1;
+        }
+        
+        /* ========================================
+           UTILITY CLASSES
+           ======================================== */
+        .no-data {
+            text-align: center;
+            padding: 40px;
+            color: #999;
+            font-size: 16px;
+        }
+        
+        /* Statistics bar */
+        .stats {
+            display: flex;
+            gap: 20px;
+            padding: 10px 15px;
+            background: #fff3cd;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+        
+        .stat-item {
+            display: flex;
+            gap: 5px;
+        }
+        
+        .stat-label {
+            font-weight: 600;
+        }
+        
+        /* Progress bar for confirmed terms */
+        .progress-container {
+            flex: 1;
+            min-width: 200px;
+            max-width: 300px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .progress-bar-wrapper {
+            flex: 1;
+            height: 24px;
+            background: #e9ecef;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid #dee2e6;
+            position: relative;
+        }
+        
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #28a745 0%, #20c997 100%);
+            transition: width 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 12px;
+            font-weight: 600;
+            min-width: 30px;
+        }
+        
+        .progress-text {
+            font-size: 13px;
+            font-weight: 600;
+            color: #28a745;
+            white-space: nowrap;
+        }
+    </style>
+</head>
+<body>
+    <!-- ========================================
+         MAIN CONTAINER
+         ======================================== -->
+    <div class="container">
+        <h1>Bilingual Terminology Editor</h1>
+        
+        <!-- File Upload Section -->
+        <div class="file-upload">
+            <input type="file" id="fileInput" accept=".json">
+            <label for="fileInput">Choose JSON File</label>
+            <div class="file-info" id="fileInfo">No file selected</div>
+        </div>
+        
+        <!-- Editor Section (hidden until file is loaded) -->
+        <div id="editorSection" style="display: none;">
+            
+            <!-- Statistics Bar -->
+            <div class="stats">
+                <div class="stat-item">
+                    <span class="stat-label">Total Terms:</span>
+                    <span id="totalTerms">0</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Active:</span>
+                    <span id="activeTerms">0</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Edited:</span>
+                    <span id="editedTerms">0</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Confirmed:</span>
+                    <span id="confirmedTerms">0</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Deleted:</span>
+                    <span id="deletedTerms">0</span>
+                </div>
+                <div class="progress-container">
+                    <div class="progress-bar-wrapper">
+                        <div class="progress-bar" id="progressBar" style="width: 0%;">
+                            <span id="progressBarText">0%</span>
+                        </div>
+                    </div>
+                    <span class="progress-text" id="progressText">0%</span>
+                </div>
+                <div class="stat-item" id="filteredCountIndicator" style="display: none; color: #007bff; font-weight: 600;">
+                    <span class="stat-label">Showing:</span>
+                    <span id="filteredCount">0</span>
+                </div>
+                <div class="stat-item" id="autoSaveIndicator" style="color: #28a745; display: none;">
+                    <span>💾 Auto-saved</span>
+                </div>
+            </div>
+            
+            <!-- Quick Tips Box -->
+            <div style="background: #e7f3ff; padding: 10px 15px; border-radius: 4px; margin-bottom: 20px; font-size: 13px; color: #004085; border-left: 4px solid #007bff;">
+                <strong>💡 Quick Tips:</strong>
+                • Use text filters above to search source/target terms (supports plain text or RegEx)
+                • Press Escape in filter boxes to quickly clear all text filters
+                • Press Enter in source/target fields to confirm the term pair
+                • Click the 📋 icon to select from available target terms and their variants
+                • Click the ✓ button to confirm a source-target pair (turns green)
+                • Editing source/target or reselecting removes confirmed status
+                • <strong>All edits are auto-saved to your browser</strong> using the file's unique_id
+                • Combine text filters with status filters (edited/unedited/confirmed) for powerful searching
+            </div>
+            
+            <!-- Text Filter Section -->
+            <div style="background: #f8f9fa; padding: 15px; border-radius: 6px; margin-bottom: 20px; border: 1px solid #dee2e6;">
+                <div style="display: flex; gap: 15px; align-items: center; flex-wrap: wrap;">
+                    <!-- Source Term Filter -->
+                    <div style="flex: 1; min-width: 250px;">
+                        <label style="display: block; font-size: 13px; font-weight: 600; margin-bottom: 5px; color: #495057;">
+                            Filter Source Term:
+                        </label>
+                        <input 
+                            type="text" 
+                            id="sourceFilterInput" 
+                            placeholder="e.g., doctor, ^med (regex: starts with 'med')" 
+                            style="width: 100%; padding: 8px; border: 1px solid #ced4da; border-radius: 4px; font-size: 14px; font-family: Tahoma, sans-serif;"
+                            oninput="applyTextFilters()"
+                            onkeydown="handleFilterKeydown(event)"
+                        >
+                    </div>
+                    <!-- Target Term Filter -->
+                    <div style="flex: 1; min-width: 250px;">
+                        <label style="display: block; font-size: 13px; font-weight: 600; margin-bottom: 5px; color: #495057;">
+                            Filter Target Term:
+                        </label>
+                        <input 
+                            type="text" 
+                            id="targetFilterInput" 
+                            placeholder="e.g., طبيب, .*ال.* (regex: contains 'ال')" 
+                            style="width: 100%; padding: 8px; border: 1px solid #ced4da; border-radius: 4px; font-size: 14px; font-family: Tahoma, sans-serif;"
+                            oninput="applyTextFilters()"
+                            onkeydown="handleFilterKeydown(event)"
+                        >
+                    </div>
+                    <!-- RegEx Checkbox -->
+                    <div style="display: flex; align-items: center; gap: 8px; margin-top: 20px;">
+                        <input 
+                            type="checkbox" 
+                            id="regexCheckbox" 
+                            style="width: 18px; height: 18px; cursor: pointer;"
+                            onchange="toggleRegex()"
+                        >
+                        <label for="regexCheckbox" style="font-size: 14px; cursor: pointer; user-select: none;">
+                            Use RegEx
+                        </label>
+                    </div>
+                    <!-- Clear Filters Button -->
+                    <div style="margin-top: 20px;">
+                        <button 
+                            onclick="clearTextFilters()" 
+                            style="padding: 8px 16px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;"
+                            title="Clear all text filters"
+                        >
+                            Clear Filters
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Top Pagination Controls -->
+            <div class="navigation">
+                <div class="nav-controls">
+                    <button id="firstPageBtn" onclick="goToPage(1)">⏮ First</button>
+                    <button id="prevPageBtn" onclick="goToPage(currentPage - 1)">◀ Prev</button>
+                    <span class="nav-info" style="margin: 0 15px;">
+                        Page <span id="currentPageNum">1</span> of <span id="totalPages">1</span>
+                    </span>
+                    <button id="nextPageBtn" onclick="goToPage(currentPage + 1)">Next ▶</button>
+                    <button id="lastPageBtn" onclick="goToPage(Math.ceil(getFilteredTerms().length / itemsPerPage))">Last ⏭</button>
+                </div>
+                <div class="nav-info">
+                    <span>Showing <span id="showingRange">0-0</span> of <span id="totalTermsCount">0</span></span>
+                </div>
+                <div class="nav-controls">
+                    <label style="font-size: 14px; margin-right: 10px;">Filter:</label>
+                    <select id="filterSelect" onchange="changeFilter(this.value)" style="padding: 6px; border-radius: 4px; border: 1px solid #ced4da; margin-right: 15px;">
+                        <option value="all" selected>All Terms</option>
+                        <option value="edited">Edited Only</option>
+                        <option value="unedited">Unedited Only</option>
+                        <option value="confirmed">Confirmed Only</option>
+                        <option value="unconfirmed">Unconfirmed Only</option>
+                    </select>
+                    <label style="font-size: 14px; margin-right: 10px;">Per page:</label>
+                    <select id="itemsPerPageSelect" onchange="changeItemsPerPage(this.value)" style="padding: 6px; border-radius: 4px; border: 1px solid #ced4da; margin-right: 15px;">
+                        <option value="20" selected>20</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                        <option value="200">200</option>
+                        <option value="500">500</option>
+                    </select>
+                    <button onclick="clearCurrentFileEdits()" title="Clear all saved edits for this file">🗑️ Clear Edits</button>
+                    <button id="recycleBinBtn" onclick="showRecycleBin()">♻️ Recycle Bin</button>
+                    <div class="export-dropdown" id="exportDropdown">
+                        <button onclick="toggleExportDropdown()">📊 Export to Excel ▼</button>
+                        <div class="export-dropdown-content">
+                            <button onclick="exportConfirmedToExcel()">📊 Export Confirmed</button>
+                            <button onclick="exportAllToExcel()">📊 Export All</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Main Terms Table -->
+            <table class="terms-table">
+                <thead>
+                    <tr>
+                        <th style="width: 30%">Source Term</th>
+                        <th style="width: 30%">Target Term</th>
+                        <th style="width: 15%">Candidates</th>
+                        <th style="width: 10%">Confirm</th>
+                        <th style="width: 15%">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="termsBody">
+                    <tr>
+                        <td colspan="5" class="no-data">Load a JSON file to begin editing</td>
+                    </tr>
+                </tbody>
+            </table>
+            
+            <!-- Bottom Pagination Controls (duplicate of top) -->
+            <div class="navigation bottom">
+                <div class="nav-controls">
+                    <button id="firstPageBtn2" onclick="goToPage(1)">⏮ First</button>
+                    <button id="prevPageBtn2" onclick="goToPage(currentPage - 1)">◀ Prev</button>
+                    <span class="nav-info" style="margin: 0 15px;">
+                        Page <span id="currentPageNum2">1</span> of <span id="totalPages2">1</span>
+                    </span>
+                    <button id="nextPageBtn2" onclick="goToPage(currentPage + 1)">Next ▶</button>
+                    <button id="lastPageBtn2" onclick="goToPage(Math.ceil(getFilteredTerms().length / itemsPerPage))">Last ⏭</button>
+                </div>
+                <div class="nav-info">
+                    <span>Showing <span id="showingRange2">0-0</span> of <span id="totalTermsCount2">0</span></span>
+                </div>
+                <div class="nav-controls">
+                    <label style="font-size: 14px; margin-right: 10px;">Filter:</label>
+                    <select id="filterSelect2" onchange="changeFilter(this.value)" style="padding: 6px; border-radius: 4px; border: 1px solid #ced4da; margin-right: 15px;">
+                        <option value="all" selected>All Terms</option>
+                        <option value="edited">Edited Only</option>
+                        <option value="unedited">Unedited Only</option>
+                        <option value="confirmed">Confirmed Only</option>
+                        <option value="unconfirmed">Unconfirmed Only</option>
+                    </select>
+                    <label style="font-size: 14px; margin-right: 10px;">Per page:</label>
+                    <select id="itemsPerPageSelect2" onchange="changeItemsPerPage(this.value)" style="padding: 6px; border-radius: 4px; border: 1px solid #ced4da; margin-right: 15px;">
+                        <option value="20" selected>20</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                        <option value="200">200</option>
+                        <option value="500">500</option>
+                    </select>
+                    <button onclick="clearCurrentFileEdits()" title="Clear all saved edits for this file">🗑️ Clear Edits</button>
+                    <button id="recycleBinBtn2" onclick="showRecycleBin()">♻️ Recycle Bin</button>
+                    <div class="export-dropdown" id="exportDropdown2">
+                        <button onclick="toggleExportDropdown2()">📊 Export to Excel ▼</button>
+                        <div class="export-dropdown-content">
+                            <button onclick="exportConfirmedToExcel()">📊 Export Confirmed</button>
+                            <button onclick="exportAllToExcel()">📊 Export All</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- ========================================
+         CANDIDATES MODAL
+         ======================================== -->
+    <div id="candidatesModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Select Target Term or Variant</h2>
+                <button class="close-btn" onclick="closeCandidatesModal()">×</button>
+            </div>
+            <ul class="candidate-list" id="candidateList"></ul>
+        </div>
+    </div>
+    
+    <!-- ========================================
+         RECYCLE BIN MODAL
+         ======================================== -->
+    <div id="recycleBinModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Recycle Bin</h2>
+                <button class="close-btn" onclick="closeRecycleBin()">×</button>
+            </div>
+            <div id="recycleBinContent">
+                <ul class="recycle-list" id="recycleList"></ul>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        /* ========================================
+           GLOBAL STATE VARIABLES
+           ======================================== */
+        let termsData = {};           // Original JSON data
+        let termsList = [];           // Array of term objects with metadata
+        let termMetadata = {};        // Stores edited, confirmed, selectedTarget for each term key
+        let deletedTerms = [];        // Terms that have been deleted (recycle bin)
+        let currentTermIndex = null;  // Currently selected row index
+        let currentCandidateKey = null; // Index of term whose candidates are being viewed
+        let currentPage = 1;          // Current page number
+        let itemsPerPage = 20;        // Terms per page
+        let currentFilter = 'all';    // 'all', 'edited', 'unedited', 'confirmed', 'unconfirmed'
+        
+        // Text filter state
+        let sourceFilter = '';
+        let targetFilter = '';
+        let useRegex = false;
+        
+        // File metadata
+        let fileMetadata = {
+            src_lang: null,
+            tar_lang: null,
+            unique_id: null
+        };
+        
+        /* ========================================
+           LOCALSTORAGE FUNCTIONS
+           Auto-save/load functionality
+           ======================================== */
+        
+        // Save current edits to localStorage
+        function saveToLocalStorage() {
+            if (!fileMetadata.unique_id) return;
+            
+            const storageKey = `terminology_editor_${fileMetadata.unique_id}`;
+            const dataToSave = {
+                metadata: termMetadata,
+                deletedTerms: deletedTerms,  // Also save deleted terms
+                timestamp: new Date().toISOString()
+            };
+            
+            try {
+                localStorage.setItem(storageKey, JSON.stringify(dataToSave));
+                console.log('Auto-saved to localStorage for unique_id:', fileMetadata.unique_id);
+                
+                // Show auto-save indicator briefly
+                const indicator = document.getElementById('autoSaveIndicator');
+                if (indicator) {
+                    indicator.style.display = 'flex';
+                    setTimeout(() => {
+                        indicator.style.display = 'none';
+                    }, 2000);
+                }
+            } catch (e) {
+                console.error('Failed to save to localStorage:', e);
+            }
+        }
+        
+        // Load saved edits from localStorage
+        function loadFromLocalStorage(uniqueId) {
+            const storageKey = `terminology_editor_${uniqueId}`;
+            
+            try {
+                const savedData = localStorage.getItem(storageKey);
+                if (savedData) {
+                    const parsed = JSON.parse(savedData);
+                    console.log('Loaded from localStorage for unique_id:', uniqueId, 'saved at:', parsed.timestamp);
+                    
+                    // Show notification that data was loaded
+                    showNotification('📂 Restored previous edits from ' + new Date(parsed.timestamp).toLocaleString(), 'info');
+                    
+                    return {
+                        metadata: parsed.metadata || {},
+                        deletedTerms: parsed.deletedTerms || []
+                    };
+                }
+            } catch (e) {
+                console.error('Failed to load from localStorage:', e);
+            }
+            
+            return {
+                metadata: {},
+                deletedTerms: []
+            };
+        }
+        
+        // Clear localStorage for a specific file
+        function clearLocalStorage(uniqueId) {
+            const storageKey = `terminology_editor_${uniqueId}`;
+            try {
+                localStorage.removeItem(storageKey);
+                console.log('Cleared localStorage for unique_id:', uniqueId);
+            } catch (e) {
+                console.error('Failed to clear localStorage:', e);
+            }
+        }
+        
+        /* ========================================
+           UI NOTIFICATION FUNCTION
+           ======================================== */
+        function showNotification(message, type = 'success') {
+            const notification = document.createElement('div');
+            notification.style.cssText = `
+                position: fixed; 
+                top: 20px; 
+                right: 20px; 
+                background: ${type === 'success' ? '#28a745' : type === 'info' ? '#17a2b8' : '#dc3545'}; 
+                color: white; 
+                padding: 15px 20px; 
+                border-radius: 4px; 
+                box-shadow: 0 2px 8px rgba(0,0,0,0.2); 
+                z-index: 2000; 
+                font-size: 14px;
+                max-width: 300px;
+            `;
+            notification.textContent = message;
+            document.body.appendChild(notification);
+            
+            // Auto-remove after 3 seconds
+            setTimeout(() => {
+                notification.style.opacity = '0';
+                notification.style.transition = 'opacity 0.3s';
+                setTimeout(() => notification.remove(), 300);
+            }, 3000);
+        }
+        
+        /* ========================================
+           CLEAR EDITS FUNCTION
+           ======================================== */
+        function clearCurrentFileEdits() {
+            if (!fileMetadata.unique_id) {
+                alert('No file loaded or file does not have a unique_id.');
+                return;
+            }
+            
+            if (confirm('Are you sure you want to clear all saved edits for this file? This will reset all editing history from localStorage.')) {
+                clearLocalStorage(fileMetadata.unique_id);
+                
+                // Restore all deleted terms back to termsData
+                deletedTerms.forEach(deletedTerm => {
+                    termsData[deletedTerm.key] = deletedTerm.data;
+                });
+                deletedTerms = [];
+                
+                termMetadata = {};
+                rebuildTermsList();
+                updateStats();
+                renderTermsTable();
+                updateRecycleBinButton();
+                showNotification('✔ All edits cleared for this file', 'success');
+            }
+        }
+        
+        /* ========================================
+           TERMS LIST MANAGEMENT
+           ======================================== */
+        
+        // Rebuild termsList from termsData while preserving metadata
+        function rebuildTermsList() {
+            termsList = Object.keys(termsData).map(key => {
+                const term = {
+                    key: key,
+                    data: termsData[key]
+                };
+                
+                // Restore metadata if it exists
+                if (termMetadata[key]) {
+                    term.edited = termMetadata[key].edited;
+                    term.confirmed = termMetadata[key].confirmed;
+                    term.selectedTarget = termMetadata[key].selectedTarget;
+                    // Restore modified source term if it was changed
+                    if (termMetadata[key].modifiedSource) {
+                        term.data.original = termMetadata[key].modifiedSource;
+                    }
+                }
+                
+                return term;
+            });
+        }
+        
+        /* ========================================
+           FILE UPLOAD HANDLER
+           ======================================== */
+        document.getElementById('fileInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    try {
+                        const jsonData = JSON.parse(event.target.result);
+                        
+                        // Check for new structure with "terms" nested
+                        if (jsonData.terms && jsonData.unique_id) {
+                            // New structure
+                            fileMetadata.src_lang = jsonData.src_lang || null;
+                            fileMetadata.tar_lang = jsonData.tar_lang || null;
+                            fileMetadata.unique_id = jsonData.unique_id;
+                            termsData = jsonData.terms;
+                        } else {
+                            // Old structure - assume it's just the terms directly
+                            fileMetadata.src_lang = null;
+                            fileMetadata.tar_lang = null;
+                            fileMetadata.unique_id = null;
+                            termsData = jsonData;
+                        }
+                        
+                        // Load metadata and deleted terms from localStorage if available
+                        if (fileMetadata.unique_id) {
+                            const savedData = loadFromLocalStorage(fileMetadata.unique_id);
+                            termMetadata = savedData.metadata;
+                            deletedTerms = savedData.deletedTerms;
+                            
+                            // Remove deleted terms from termsData (they're still in the JSON file)
+                            deletedTerms.forEach(deletedTerm => {
+                                if (termsData[deletedTerm.key]) {
+                                    delete termsData[deletedTerm.key];
+                                }
+                            });
+                            
+                            console.log('Loaded from localStorage:', Object.keys(termMetadata).length, 'term edits,', deletedTerms.length, 'deleted terms');
+                        } else {
+                            termMetadata = {}; // Reset metadata for files without unique_id
+                            deletedTerms = [];
+                        }
+                        
+                        rebuildTermsList();
+                        currentPage = 1;
+                        itemsPerPage = 20;
+                        currentFilter = 'all';
+                        
+                        // Update file info display
+                        let fileInfoText = `Loaded: ${file.name} (${termsList.length} terms)`;
+                        if (fileMetadata.unique_id) {
+                            fileInfoText += ` | ID: ${fileMetadata.unique_id}`;
+                            if (fileMetadata.src_lang && fileMetadata.tar_lang) {
+                                fileInfoText += ` | ${fileMetadata.src_lang} → ${fileMetadata.tar_lang}`;
+                            }
+                        }
+                        
+                        document.getElementById('fileInfo').textContent = fileInfoText;
+                        document.getElementById('editorSection').style.display = 'block';
+                        
+                        updateStats();
+                        renderTermsTable();
+                        updateRecycleBinButton();
+                    } catch (error) {
+                        alert('Error parsing JSON file: ' + error.message);
+                    }
+                };
+                reader.readAsText(file);
+            }
+        });
+        
+        /* ========================================
+           STATISTICS UPDATE
+           ======================================== */
+        function updateStats() {
+            const total = Object.keys(termsData).length + deletedTerms.length;
+            const active = Object.keys(termsData).length;
+            const deleted = deletedTerms.length;
+            const edited = termsList.filter(term => term.edited).length;
+            const confirmed = termsList.filter(term => term.confirmed).length;
+            
+            document.getElementById('totalTerms').textContent = total;
+            document.getElementById('activeTerms').textContent = active;
+            document.getElementById('editedTerms').textContent = edited;
+            document.getElementById('confirmedTerms').textContent = confirmed;
+            document.getElementById('deletedTerms').textContent = deleted;
+            
+            // Update progress bar
+            const percentage = active > 0 ? Math.round((confirmed / active) * 100) : 0;
+            const progressBar = document.getElementById('progressBar');
+            const progressBarText = document.getElementById('progressBarText');
+            const progressText = document.getElementById('progressText');
+            
+            if (progressBar) {
+                progressBar.style.width = percentage + '%';
+            }
+            if (progressBarText) {
+                progressBarText.textContent = percentage + '%';
+            }
+            if (progressText) {
+                progressText.textContent = `${confirmed}/${active} confirmed`;
+            }
+        }
+        
+        /* ========================================
+           TABLE RENDERING
+           ======================================== */
+        function renderTermsTable() {
+            const tbody = document.getElementById('termsBody');
+            tbody.innerHTML = '';
+            
+            const filteredTerms = getFilteredTerms();
+            
+            // Update filtered count indicator
+            const hasFilters = sourceFilter || targetFilter || currentFilter !== 'all';
+            const filteredCountIndicator = document.getElementById('filteredCountIndicator');
+            if (filteredCountIndicator) {
+                if (hasFilters && filteredTerms.length < termsList.length) {
+                    filteredCountIndicator.style.display = 'flex';
+                    document.getElementById('filteredCount').textContent = filteredTerms.length;
+                } else {
+                    filteredCountIndicator.style.display = 'none';
+                }
+            }
+            
+            // Show message if no terms to display
+            if (filteredTerms.length === 0) {
+                let message = 'No terms to display';
+                if (currentFilter === 'edited') message = 'No edited terms';
+                else if (currentFilter === 'unedited') message = 'No unedited terms';
+                else if (currentFilter === 'confirmed') message = 'No confirmed terms';
+                else if (currentFilter === 'unconfirmed') message = 'No unconfirmed terms';
+                
+                if (sourceFilter || targetFilter) {
+                    message += ' matching your search';
+                }
+                
+                tbody.innerHTML = `<tr><td colspan="5" class="no-data">${message}</td></tr>`;
+                updatePagination();
+                return;
+            }
+            
+            // Calculate pagination
+            const totalPages = Math.ceil(filteredTerms.length / itemsPerPage);
+            const startIndex = (currentPage - 1) * itemsPerPage;
+            const endIndex = Math.min(startIndex + itemsPerPage, filteredTerms.length);
+            const pageTerms = filteredTerms.slice(startIndex, endIndex);
+            
+            // Render each term row
+            pageTerms.forEach((term, pageIndex) => {
+                const actualIndex = termsList.indexOf(term);
+                const row = createTermRow(term, actualIndex);
+                tbody.appendChild(row);
+            });
+            
+            updatePagination();
+        }
+        
+        /* ========================================
+           CREATE TABLE ROW
+           ======================================== */
+        function createTermRow(term, index) {
+            const row = document.createElement('tr');
+            row.dataset.index = index;
+            row.onclick = () => selectRow(index);
+            
+            // Mark row as edited if term has been modified
+            if (term.edited) {
+                row.classList.add('edited-row');
+            }
+            
+            // Source term cell with input
+            const sourceCell = document.createElement('td');
+            const sourceInput = document.createElement('input');
+            sourceInput.type = 'text';
+            sourceInput.className = 'term-input';
+            sourceInput.value = term.data.original || term.key;
+            sourceInput.dir = 'auto';
+            sourceInput.onchange = (e) => {
+                updateSourceTerm(index, e.target.value);
+                renderTermsTable();
+            };
+            // Confirm on Enter key press and move to next row
+            sourceInput.onkeydown = (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    confirmAndMoveNext(index);
+                }
+            };
+            sourceCell.appendChild(sourceInput);
+            
+            // Target term cell with input
+            const targetCell = document.createElement('td');
+            const targetInput = document.createElement('input');
+            targetInput.type = 'text';
+            targetInput.className = 'term-input';
+            
+            // Use selected target if available, otherwise fall back to top candidate
+            let targetValue = '';
+            if (term.selectedTarget && term.selectedTarget.value) {
+                targetValue = term.selectedTarget.value;
+            } else {
+                const topCandidate = getTopCandidate(term.data.cands);
+                targetValue = topCandidate ? topCandidate.term : '';
+            }
+            
+            targetInput.value = targetValue;
+            targetInput.dir = 'auto';
+            targetInput.onchange = (e) => {
+                updateTargetTerm(index, e.target.value);
+                renderTermsTable();
+            };
+            // Confirm on Enter key press and move to next row
+            targetInput.onkeydown = (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    confirmAndMoveNext(index);
+                }
+            };
+            
+            // Apply confirmed styling if term was confirmed
+            if (term.confirmed) {
+                targetInput.style.background = '#d4edda';
+                targetInput.style.borderLeft = '4px solid #28a745';
+            }
+            
+            targetCell.appendChild(targetInput);
+            
+            // Candidates button cell
+            const candidateCell = document.createElement('td');
+            const candidateBtn = document.createElement('button');
+            candidateBtn.className = 'candidate-btn';
+            
+            const candidateCount = Object.keys(term.data.cands || {}).length;
+            candidateBtn.innerHTML = `📋 ${candidateCount}`;
+            candidateBtn.title = `${candidateCount} candidate${candidateCount !== 1 ? 's' : ''} available`;
+            candidateBtn.onclick = (e) => {
+                e.stopPropagation();
+                showCandidatesModal(index);
+            };
+            candidateCell.appendChild(candidateBtn);
+            
+            // Confirm button cell
+            const confirmCell = document.createElement('td');
+            confirmCell.className = 'action-cell';
+            const confirmBtn = document.createElement('button');
+            confirmBtn.className = term.confirmed ? 'confirm-btn confirmed' : 'confirm-btn';
+            confirmBtn.innerHTML = term.confirmed ? '✓' : '✓';
+            confirmBtn.title = term.confirmed ? 'Confirmed' : 'Confirm this term';
+            confirmBtn.onclick = (e) => {
+                e.stopPropagation();
+                toggleConfirmStatus(index);
+            };
+            confirmCell.appendChild(confirmBtn);
+            
+            // Actions cell with delete button
+            const actionsCell = document.createElement('td');
+            actionsCell.className = 'action-cell';
+            const deleteBtn = document.createElement('button');
+            deleteBtn.className = 'delete-btn';
+            deleteBtn.textContent = 'Delete';
+            deleteBtn.onclick = (e) => {
+                e.stopPropagation();
+                deleteTerm(index);
+            };
+            actionsCell.appendChild(deleteBtn);
+            
+            // Assemble row
+            row.appendChild(sourceCell);
+            row.appendChild(targetCell);
+            row.appendChild(candidateCell);
+            row.appendChild(confirmCell);
+            row.appendChild(actionsCell);
+            
+            return row;
+        }
+        
+        /* ========================================
+           HELPER FUNCTIONS
+           ======================================== */
+        
+        // Get top candidate based on points
+        function getTopCandidate(candidates) {
+            if (!candidates || Object.keys(candidates).length === 0) return null;
+            
+            const sorted = Object.entries(candidates).sort((a, b) => b[1].points - a[1].points);
+            return {
+                term: sorted[0][0],
+                data: sorted[0][1]
+            };
+        }
+        
+        // Select a row (highlight it)
+        function selectRow(index) {
+            // Remove active class from all rows
+            document.querySelectorAll('.terms-table tr').forEach(row => {
+                row.classList.remove('active');
+            });
+            
+            // Add active class to selected row
+            const rows = document.querySelectorAll(`tr[data-index="${index}"], tr[data-parent-index="${index}"]`);
+            rows.forEach(row => row.classList.add('active'));
+            
+            currentTermIndex = index;
+        }
+        
+        /* ========================================
+           TERM UPDATE FUNCTIONS
+           ======================================== */
+        
+        // Update source term value
+        function updateSourceTerm(index, value) {
+            if (termsList[index]) {
+                termsList[index].data.original = value;
+                termsList[index].edited = true;
+                
+                // Clear confirmed status when editing source
+                if (termsList[index].confirmed) {
+                    termsList[index].confirmed = false;
+                }
+                
+                // Store in metadata (including the modified source term)
+                const key = termsList[index].key;
+                if (!termMetadata[key]) termMetadata[key] = {};
+                termMetadata[key].edited = true;
+                termMetadata[key].confirmed = termsList[index].confirmed;
+                termMetadata[key].modifiedSource = value; // Store the modified source term
+                
+                saveToLocalStorage();
+                updateStats();
+            }
+        }
+        
+        // Update target term value
+        function updateTargetTerm(index, value) {
+            if (termsList[index]) {
+                if (!termsList[index].selectedTarget) {
+                    termsList[index].selectedTarget = {};
+                }
+                termsList[index].selectedTarget.value = value;
+                termsList[index].edited = true;
+                
+                // Clear confirmed status when editing target
+                if (termsList[index].confirmed) {
+                    termsList[index].confirmed = false;
+                }
+                
+                // Store in metadata
+                const key = termsList[index].key;
+                if (!termMetadata[key]) termMetadata[key] = {};
+                termMetadata[key].edited = true;
+                termMetadata[key].confirmed = termsList[index].confirmed;
+                termMetadata[key].selectedTarget = termsList[index].selectedTarget;
+                
+                saveToLocalStorage();
+                updateStats();
+            }
+        }
+        
+        /* ========================================
+           CANDIDATES MODAL FUNCTIONS
+           ======================================== */
+        
+        // Show candidates modal for a term
+        function showCandidatesModal(index) {
+            currentCandidateKey = index;
+            const term = termsList[index];
+            const candidates = term.data.cands || {};
+            
+            // Get currently selected target
+            const currentTarget = term.selectedTarget && term.selectedTarget.value ? term.selectedTarget.value : (getTopCandidate(term.data.cands) ? getTopCandidate(term.data.cands).term : '');
+            
+            const candidateList = document.getElementById('candidateList');
+            candidateList.innerHTML = '';
+            
+            if (Object.keys(candidates).length === 0) {
+                candidateList.innerHTML = '<li class="candidate-item">No candidates available</li>';
+            } else {
+                const sorted = Object.entries(candidates).sort((a, b) => b[1].points - a[1].points);
+                
+                sorted.forEach(([candidateTerm, data]) => {
+                    const li = document.createElement('li');
+                    li.className = 'candidate-item';
+                    
+                    // Highlight currently selected candidate
+                    const isCurrentlySelected = candidateTerm === currentTarget;
+                    if (isCurrentlySelected) {
+                        li.style.background = '#d4edda';
+                        li.style.borderColor = '#28a745';
+                        li.style.borderWidth = '2px';
+                    }
+                    
+                    li.onclick = () => selectCandidate(candidateTerm);
+                    
+                    // Check if variants exist
+                    const hasVariants = data.variants && Array.isArray(data.variants) && data.variants.length > 0;
+                    const variantCount = hasVariants ? data.variants.length : 0;
+                    
+                    li.innerHTML = `
+                        <div class="candidate-term" dir="auto">
+                            ${isCurrentlySelected ? '✓ ' : ''}${candidateTerm}
+                        </div>
+                        <div class="candidate-stats">
+                            <span>Hits: ${data.hits}</span>
+                            <span>Points: ${data.points.toFixed(2)}</span>
+                            <span>LLM Score: ${(data.llm_score * 100).toFixed(1)}%</span>
+                            ${variantCount > 0 ? `<span style="color: #007bff; font-weight: 600;">Variants: ${variantCount}</span>` : ''}
+                        </div>
+                    `;
+                    
+                    candidateList.appendChild(li);
+                    
+                    // Add variant options if they exist
+                    if (hasVariants) {
+                        // Flatten and sort variants by points
+                        const flattenedVariants = [];
+                        data.variants.forEach(variantObj => {
+                            Object.entries(variantObj).forEach(([variantTerm, variantData]) => {
+                                flattenedVariants.push([variantTerm, variantData]);
+                            });
+                        });
+                        
+                        flattenedVariants.sort((a, b) => {
+                            const pointsA = a[1].points || 0;
+                            const pointsB = b[1].points || 0;
+                            return pointsB - pointsA;
+                        });
+                        
+                        flattenedVariants.forEach(([variantTerm, variantData]) => {
+                            const variantLi = document.createElement('li');
+                            variantLi.className = 'candidate-item';
+                            variantLi.style.marginLeft = '30px';
+                            variantLi.style.background = '#f0f8ff';
+                            variantLi.style.borderLeft = '3px solid #6c757d';
+                            
+                            const isVariantSelected = variantTerm === currentTarget;
+                            if (isVariantSelected) {
+                                variantLi.style.background = '#d4edda';
+                                variantLi.style.borderColor = '#28a745';
+                                variantLi.style.borderWidth = '3px';
+                            }
+                            
+                            variantLi.onclick = () => selectCandidate(variantTerm);
+                            
+                            // Build stats HTML with safety checks
+                            const statsHtml = [];
+                            if (variantData.hits !== undefined) {
+                                statsHtml.push(`<span>Hits: ${variantData.hits}</span>`);
+                            }
+                            if (variantData.points !== undefined) {
+                                statsHtml.push(`<span>Points: ${variantData.points.toFixed(2)}</span>`);
+                            }
+                            if (variantData.llm_score !== undefined) {
+                                statsHtml.push(`<span>LLM Score: ${(variantData.llm_score * 100).toFixed(1)}%</span>`);
+                            }
+                            statsHtml.push(`<span style="color: #888; font-style: italic;">Variant of "${candidateTerm}"</span>`);
+                            
+                            variantLi.innerHTML = `
+                                <div class="candidate-term" dir="auto" style="font-size: 14px;">
+                                    <span style="color: #6c757d; margin-right: 5px;">↳</span>
+                                    ${isVariantSelected ? '✓ ' : ''}${variantTerm}
+                                </div>
+                                <div class="candidate-stats" style="font-size: 11px;">
+                                    ${statsHtml.join('')}
+                                </div>
+                            `;
+                            
+                            candidateList.appendChild(variantLi);
+                        });
+                    }
+                });
+            }
+            
+            document.getElementById('candidatesModal').classList.add('show');
+        }
+        
+        // Close candidates modal
+        function closeCandidatesModal() {
+            document.getElementById('candidatesModal').classList.remove('show');
+            currentCandidateKey = null;
+        }
+        
+        // Select a candidate from the modal
+        function selectCandidate(candidateTerm) {
+            if (currentCandidateKey !== null) {
+                const term = termsList[currentCandidateKey];
+                
+                // Store the selected target term
+                if (!term.selectedTarget) {
+                    term.selectedTarget = {};
+                }
+                term.selectedTarget.value = candidateTerm;
+                
+                // Mark as edited and clear confirmed status
+                term.edited = true;
+                term.confirmed = false;
+                
+                // Store in metadata
+                const key = term.key;
+                if (!termMetadata[key]) termMetadata[key] = {};
+                termMetadata[key].edited = true;
+                termMetadata[key].confirmed = false;
+                termMetadata[key].selectedTarget = term.selectedTarget;
+                
+                saveToLocalStorage();
+                updateStats();
+                
+                // Calculate which page this term is on
+                const termPage = Math.ceil((currentCandidateKey + 1) / itemsPerPage);
+                
+                // Update the target input field
+                const row = document.querySelector(`tr[data-index="${currentCandidateKey}"]`);
+                if (row) {
+                    const targetInput = row.querySelectorAll('.term-input')[1];
+                    if (targetInput) {
+                        targetInput.value = candidateTerm;
+                        // Flash effect to show it was updated
+                        targetInput.style.background = '#fff3cd';
+                        setTimeout(() => {
+                            targetInput.style.background = '';
+                        }, 500);
+                    }
+                } else {
+                    // If row is not visible (different page), navigate to it
+                    currentPage = termPage;
+                }
+                
+                // Re-render to update display
+                renderTermsTable();
+                selectRow(currentCandidateKey);
+            }
+            closeCandidatesModal();
+        }
+        
+        /* ========================================
+           CONFIRM STATUS FUNCTIONS
+           ======================================== */
+        
+        // Clear confirmed status (when editing)
+        function clearConfirmedStatus(index) {
+            if (termsList[index] && termsList[index].confirmed) {
+                termsList[index].confirmed = false;
+                termsList[index].edited = true;
+                
+                // Store in metadata
+                const key = termsList[index].key;
+                if (!termMetadata[key]) termMetadata[key] = {};
+                termMetadata[key].confirmed = false;
+                termMetadata[key].edited = true;
+                
+                saveToLocalStorage();
+                updateStats();
+                renderTermsTable();
+            } else if (termsList[index]) {
+                // Just mark as edited even if not previously confirmed
+                termsList[index].edited = true;
+                
+                // Store in metadata
+                const key = termsList[index].key;
+                if (!termMetadata[key]) termMetadata[key] = {};
+                termMetadata[key].edited = true;
+                
+                saveToLocalStorage();
+                updateStats();
+            }
+        }
+        
+        // Toggle confirmed status
+        function toggleConfirmStatus(index) {
+            if (termsList[index]) {
+                const row = document.querySelector(`tr[data-index="${index}"]`);
+                const targetInput = row ? row.querySelectorAll('.term-input')[1] : null;
+                
+                // Only allow confirmation if target term has a value
+                if (targetInput && targetInput.value.trim()) {
+                    termsList[index].confirmed = !termsList[index].confirmed;
+                    
+                    // Mark as edited when confirming
+                    if (termsList[index].confirmed) {
+                        termsList[index].edited = true;
+                    }
+                    
+                    // Store in metadata
+                    const key = termsList[index].key;
+                    if (!termMetadata[key]) termMetadata[key] = {};
+                    termMetadata[key].confirmed = termsList[index].confirmed;
+                    if (termsList[index].confirmed) {
+                        termMetadata[key].edited = true;
+                    }
+                    
+                    saveToLocalStorage();
+                    updateStats();
+                    renderTermsTable();
+                    selectRow(index);
+                } else {
+                    alert('Please enter a target term before confirming.');
+                }
+            }
+        }
+        
+        // Confirm and move to next (for Enter key) - doesn't untoggle if already confirmed
+        function confirmAndMoveNext(index) {
+            if (termsList[index]) {
+                const row = document.querySelector(`tr[data-index="${index}"]`);
+                const targetInput = row ? row.querySelectorAll('.term-input')[1] : null;
+                
+                // Only confirm if not already confirmed and has a target value
+                if (targetInput && targetInput.value.trim()) {
+                    if (!termsList[index].confirmed) {
+                        termsList[index].confirmed = true;
+                        termsList[index].edited = true;
+                        
+                        // Store in metadata
+                        const key = termsList[index].key;
+                        if (!termMetadata[key]) termMetadata[key] = {};
+                        termMetadata[key].confirmed = true;
+                        termMetadata[key].edited = true;
+                        
+                        saveToLocalStorage();
+                        updateStats();
+                        renderTermsTable();
+                    }
+                    
+                    // Always move to next row, even if already confirmed
+                    focusNextRowTarget(index);
+                } else if (!targetInput || !targetInput.value.trim()) {
+                    alert('Please enter a target term before confirming.');
+                }
+            }
+        }
+        
+        /* ========================================
+           DELETE & RECYCLE BIN FUNCTIONS
+           ======================================== */
+        
+        // Delete a term (move to recycle bin)
+        function deleteTerm(index) {
+            const term = termsList[index];
+            
+            // Store the entire term object including metadata
+            deletedTerms.push({
+                key: term.key,
+                data: term.data,
+                metadata: termMetadata[term.key]
+            });
+            
+            delete termsData[term.key];
+            // Keep metadata in termMetadata even after deletion
+            
+            rebuildTermsList();
+            
+            // Adjust current page if necessary
+            const filteredTerms = getFilteredTerms();
+            const totalPages = Math.ceil(filteredTerms.length / itemsPerPage);
+            if (currentPage > totalPages && totalPages > 0) {
+                currentPage = totalPages;
+            }
+            
+            saveToLocalStorage(); // Persist the deletion
+            updateStats();
+            renderTermsTable();
+            updateRecycleBinButton();
+        }
+        
+        // Show recycle bin modal
+        function showRecycleBin() {
+            const recycleList = document.getElementById('recycleList');
+            recycleList.innerHTML = '';
+            
+            if (deletedTerms.length === 0) {
+                recycleList.innerHTML = '<li class="recycle-item" style="justify-content: center; color: #6c757d; font-style: italic;">No deleted terms</li>';
+            } else {
+                deletedTerms.forEach((term, index) => {
+                    const li = document.createElement('li');
+                    li.className = 'recycle-item';
+                    
+                    const termDiv = document.createElement('div');
+                    termDiv.className = 'recycle-term';
+                    termDiv.dir = 'auto';
+                    termDiv.textContent = term.data.original || term.key;
+                    
+                    const restoreBtn = document.createElement('button');
+                    restoreBtn.className = 'restore';
+                    restoreBtn.textContent = 'Restore';
+                    restoreBtn.onclick = () => restoreTerm(index);
+                    
+                    li.appendChild(termDiv);
+                    li.appendChild(restoreBtn);
+                    recycleList.appendChild(li);
+                });
+            }
+            
+            document.getElementById('recycleBinModal').classList.add('show');
+        }
+        
+        // Close recycle bin modal
+        function closeRecycleBin() {
+            document.getElementById('recycleBinModal').classList.remove('show');
+        }
+        
+        // Restore a deleted term
+        function restoreTerm(index) {
+            const term = deletedTerms[index];
+            termsData[term.key] = term.data;
+            
+            // Restore metadata if it was saved
+            if (term.metadata) {
+                termMetadata[term.key] = term.metadata;
+            }
+            
+            deletedTerms.splice(index, 1);
+            rebuildTermsList();
+            
+            // Stay on current page or go to last page if items were added
+            const filteredTerms = getFilteredTerms();
+            const totalPages = Math.ceil(filteredTerms.length / itemsPerPage);
+            if (currentPage > totalPages) {
+                currentPage = totalPages;
+            }
+            
+            saveToLocalStorage(); // Persist the restoration
+            updateStats();
+            renderTermsTable();
+            showRecycleBin(); // Refresh the recycle bin view
+            updateRecycleBinButton();
+        }
+        
+        // Update Recycle Bin button with deleted items count
+        function updateRecycleBinButton() {
+            const count = deletedTerms.length;
+            const badge = count > 0 ? `<span class="btn-badge">${count}</span>` : '';
+            
+            const btn1 = document.getElementById('recycleBinBtn');
+            const btn2 = document.getElementById('recycleBinBtn2');
+            
+            if (btn1) btn1.innerHTML = `♻️ Recycle Bin${badge}`;
+            if (btn2) btn2.innerHTML = `♻️ Recycle Bin${badge}`;
+        }
+        
+        /* ========================================
+           FILTERING FUNCTIONS
+           ======================================== */
+        
+        // Get filtered terms based on current filters
+        function getFilteredTerms() {
+            let filtered = termsList;
+            
+            // Apply status filter first
+            if (currentFilter === 'edited') {
+                filtered = filtered.filter(term => term.edited === true);
+            } else if (currentFilter === 'unedited') {
+                filtered = filtered.filter(term => !term.edited);
+            } else if (currentFilter === 'confirmed') {
+                filtered = filtered.filter(term => term.confirmed === true);
+            } else if (currentFilter === 'unconfirmed') {
+                filtered = filtered.filter(term => !term.confirmed);
+            }
+            
+            // Apply text filters
+            if (sourceFilter || targetFilter) {
+                filtered = filtered.filter(term => {
+                    let sourceMatches = true;
+                    let targetMatches = true;
+                    
+                    // Filter by source term
+                    if (sourceFilter) {
+                        const sourceText = term.data.original || term.key;
+                        sourceMatches = matchesFilter(sourceText, sourceFilter);
+                    }
+                    
+                    // Filter by target term
+                    if (targetFilter) {
+                        let targetText = '';
+                        if (term.selectedTarget && term.selectedTarget.value) {
+                            targetText = term.selectedTarget.value;
+                        } else {
+                            const topCandidate = getTopCandidate(term.data.cands);
+                            targetText = topCandidate ? topCandidate.term : '';
+                        }
+                        targetMatches = matchesFilter(targetText, targetFilter);
+                    }
+                    
+                    return sourceMatches && targetMatches;
+                });
+            }
+            
+            return filtered;
+        }
+        
+        // Check if text matches filter (supports regex)
+        function matchesFilter(text, filter) {
+            if (!filter) return true;
+            
+            try {
+                if (useRegex) {
+                    const regex = new RegExp(filter, 'i'); // case-insensitive
+                    return regex.test(text);
+                } else {
+                    return text.toLowerCase().includes(filter.toLowerCase());
+                }
+            } catch (e) {
+                // Invalid regex, fall back to plain text search
+                return text.toLowerCase().includes(filter.toLowerCase());
+            }
+        }
+        
+        // Apply text filters
+        function applyTextFilters() {
+            sourceFilter = document.getElementById('sourceFilterInput').value;
+            targetFilter = document.getElementById('targetFilterInput').value;
+            currentPage = 1; // Reset to first page when filtering
+            renderTermsTable();
+        }
+        
+        // Toggle regex mode
+        function toggleRegex() {
+            useRegex = document.getElementById('regexCheckbox').checked;
+            if (sourceFilter || targetFilter) {
+                // Re-apply filters with new regex setting
+                applyTextFilters();
+            }
+        }
+        
+        // Clear text filters
+        function clearTextFilters() {
+            document.getElementById('sourceFilterInput').value = '';
+            document.getElementById('targetFilterInput').value = '';
+            document.getElementById('regexCheckbox').checked = false;
+            sourceFilter = '';
+            targetFilter = '';
+            useRegex = false;
+            currentPage = 1;
+            renderTermsTable();
+        }
+        
+        // Handle Escape key in filter inputs
+        function handleFilterKeydown(event) {
+            if (event.key === 'Escape') {
+                clearTextFilters();
+            }
+        }
+        
+        // Change status filter
+        function changeFilter(newFilter) {
+            currentFilter = newFilter;
+            currentPage = 1; // Reset to first page
+            currentTermIndex = null; // Clear selection
+            
+            // Sync both filter dropdowns
+            document.getElementById('filterSelect').value = newFilter;
+            document.getElementById('filterSelect2').value = newFilter;
+            
+            renderTermsTable();
+        }
+        
+        /* ========================================
+           PAGINATION FUNCTIONS
+           ======================================== */
+        
+        // Update pagination controls
+        function updatePagination() {
+            const filteredTerms = getFilteredTerms();
+            const totalItems = filteredTerms.length;
+            const totalPages = Math.ceil(totalItems / itemsPerPage) || 1;
+            const startIndex = (currentPage - 1) * itemsPerPage + 1;
+            const endIndex = Math.min(currentPage * itemsPerPage, totalItems);
+            
+            // Update page numbers
+            document.getElementById('currentPageNum').textContent = currentPage;
+            document.getElementById('currentPageNum2').textContent = currentPage;
+            document.getElementById('totalPages').textContent = totalPages;
+            document.getElementById('totalPages2').textContent = totalPages;
+            
+            // Update showing range
+            const rangeText = totalItems > 0 ? `${startIndex}-${endIndex}` : '0-0';
+            document.getElementById('showingRange').textContent = rangeText;
+            document.getElementById('showingRange2').textContent = rangeText;
+            document.getElementById('totalTermsCount').textContent = totalItems;
+            document.getElementById('totalTermsCount2').textContent = totalItems;
+            
+            // Update button states
+            const disableFirst = currentPage <= 1;
+            const disableLast = currentPage >= totalPages;
+            
+            document.getElementById('firstPageBtn').disabled = disableFirst;
+            document.getElementById('firstPageBtn2').disabled = disableFirst;
+            document.getElementById('prevPageBtn').disabled = disableFirst;
+            document.getElementById('prevPageBtn2').disabled = disableFirst;
+            document.getElementById('nextPageBtn').disabled = disableLast;
+            document.getElementById('nextPageBtn2').disabled = disableLast;
+            document.getElementById('lastPageBtn').disabled = disableLast;
+            document.getElementById('lastPageBtn2').disabled = disableLast;
+            
+            // Update select values
+            document.getElementById('itemsPerPageSelect').value = itemsPerPage;
+            document.getElementById('itemsPerPageSelect2').value = itemsPerPage;
+            document.getElementById('filterSelect').value = currentFilter;
+            document.getElementById('filterSelect2').value = currentFilter;
+        }
+        
+        // Go to specific page
+        function goToPage(page) {
+            const filteredTerms = getFilteredTerms();
+            const totalPages = Math.ceil(filteredTerms.length / itemsPerPage);
+            if (page < 1) page = 1;
+            if (page > totalPages) page = totalPages;
+            
+            currentPage = page;
+            currentTermIndex = null; // Clear selection when changing pages
+            renderTermsTable();
+        }
+        
+        // Change items per page
+        function changeItemsPerPage(newItemsPerPage) {
+            itemsPerPage = parseInt(newItemsPerPage);
+            currentPage = 1; // Reset to first page
+            currentTermIndex = null; // Clear selection
+            renderTermsTable();
+        }
+        
+        // Scroll to a specific row
+        function scrollToRow(index) {
+            const row = document.querySelector(`tr[data-index="${index}"]`);
+            if (row) {
+                row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }
+        
+        // Focus on the next row's target input after confirmation
+        function focusNextRowTarget(currentIndex) {
+            const filteredTerms = getFilteredTerms();
+            const currentFilteredIndex = filteredTerms.indexOf(termsList[currentIndex]);
+            
+            // Check if there's a next term in the filtered list
+            if (currentFilteredIndex >= 0 && currentFilteredIndex < filteredTerms.length - 1) {
+                const nextTerm = filteredTerms[currentFilteredIndex + 1];
+                const nextIndex = termsList.indexOf(nextTerm);
+                
+                // Calculate which page the next term is on
+                const nextPage = Math.ceil((currentFilteredIndex + 2) / itemsPerPage);
+                
+                // Navigate to the page if different
+                if (nextPage !== currentPage) {
+                    currentPage = nextPage;
+                    renderTermsTable();
+                }
+                
+                // Focus on the next row's target input after a short delay to ensure render
+                setTimeout(() => {
+                    const nextRow = document.querySelector(`tr[data-index="${nextIndex}"]`);
+                    if (nextRow) {
+                        const targetInput = nextRow.querySelectorAll('.term-input')[1]; // Second input is target
+                        if (targetInput) {
+                            targetInput.focus();
+                            targetInput.select(); // Select all text for easy replacement
+                        }
+                    }
+                }, 50);
+            }
+        }
+        
+        /* ========================================
+           EXPORT TO EXCEL FUNCTIONS
+           ======================================== */
+        
+        // Toggle export dropdown menu (top)
+        function toggleExportDropdown() {
+            const dropdown = document.getElementById('exportDropdown');
+            const dropdown2 = document.getElementById('exportDropdown2');
+            dropdown.classList.toggle('show');
+            // Close the other dropdown if open
+            if (dropdown2) dropdown2.classList.remove('show');
+        }
+        
+        // Toggle export dropdown menu (bottom)
+        function toggleExportDropdown2() {
+            const dropdown = document.getElementById('exportDropdown2');
+            const dropdown1 = document.getElementById('exportDropdown');
+            dropdown.classList.toggle('show');
+            // Close the other dropdown if open
+            if (dropdown1) dropdown1.classList.remove('show');
+        }
+        
+        // Export confirmed terms to Excel
+        function exportConfirmedToExcel() {
+            closeExportDropdowns();
+            
+            const confirmedTerms = termsList.filter(term => term.confirmed);
+            
+            if (confirmedTerms.length === 0) {
+                alert('No confirmed terms to export');
+                return;
+            }
+            
+            const exportData = [];
+            
+            confirmedTerms.forEach(term => {
+                // Use selected target if available, otherwise fall back to top candidate
+                let targetTerm = '';
+                
+                if (term.selectedTarget && term.selectedTarget.value) {
+                    targetTerm = term.selectedTarget.value;
+                } else {
+                    const topCandidate = getTopCandidate(term.data.cands);
+                    if (topCandidate) {
+                        targetTerm = topCandidate.term;
+                    }
+                }
+                
+                exportData.push({
+                    'Source Term': term.data.original || term.key,
+                    'Target Term': targetTerm,
+                    'Edited': term.edited ? 'Yes' : 'No',
+                    'Confirmed': 'Yes',
+                    'Source Count': term.data.count,
+                    'Candidates Count': Object.keys(term.data.cands || {}).length
+                });
+            });
+            
+            const ws = XLSX.utils.json_to_sheet(exportData);
+            
+            // Set column widths
+            ws['!cols'] = [
+                { wch: 35 },  // Source Term
+                { wch: 35 },  // Target Term
+                { wch: 10 },  // Edited
+                { wch: 12 },  // Confirmed
+                { wch: 15 },  // Source Count
+                { wch: 18 }   // Candidates Count
+            ];
+            
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'Confirmed Terms');
+            
+            const timestamp = new Date().toISOString().slice(0, 10);
+            let filename = `terminology_confirmed_${timestamp}.xlsx`;
+            
+            if (fileMetadata.unique_id) {
+                filename = `terminology_${fileMetadata.unique_id}_confirmed_${timestamp}.xlsx`;
+            }
+            
+            XLSX.writeFile(wb, filename);
+        }
+        
+        // Export all terms to Excel
+        function exportAllToExcel() {
+            closeExportDropdowns();
+            
+            if (termsList.length === 0) {
+                alert('No data to export');
+                return;
+            }
+            
+            const exportData = [];
+            
+            termsList.forEach(term => {
+                // Use selected target if available, otherwise fall back to top candidate
+                let targetTerm = '';
+                
+                if (term.selectedTarget && term.selectedTarget.value) {
+                    targetTerm = term.selectedTarget.value;
+                } else {
+                    const topCandidate = getTopCandidate(term.data.cands);
+                    if (topCandidate) {
+                        targetTerm = topCandidate.term;
+                    }
+                }
+                
+                exportData.push({
+                    'Source Term': term.data.original || term.key,
+                    'Target Term': targetTerm,
+                    'Edited': term.edited ? 'Yes' : 'No',
+                    'Confirmed': term.confirmed ? 'Yes' : 'No',
+                    'Source Count': term.data.count,
+                    'Candidates Count': Object.keys(term.data.cands || {}).length
+                });
+            });
+            
+            const ws = XLSX.utils.json_to_sheet(exportData);
+            
+            // Set column widths
+            ws['!cols'] = [
+                { wch: 35 },  // Source Term
+                { wch: 35 },  // Target Term
+                { wch: 10 },  // Edited
+                { wch: 12 },  // Confirmed
+                { wch: 15 },  // Source Count
+                { wch: 18 }   // Candidates Count
+            ];
+            
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'All Terms');
+            
+            const timestamp = new Date().toISOString().slice(0, 10);
+            let filename = `terminology_all_${timestamp}.xlsx`;
+            
+            if (fileMetadata.unique_id) {
+                filename = `terminology_${fileMetadata.unique_id}_all_${timestamp}.xlsx`;
+            }
+            
+            XLSX.writeFile(wb, filename);
+        }
+        
+        // Close all export dropdowns
+        function closeExportDropdowns() {
+            const dropdown1 = document.getElementById('exportDropdown');
+            const dropdown2 = document.getElementById('exportDropdown2');
+            if (dropdown1) dropdown1.classList.remove('show');
+            if (dropdown2) dropdown2.classList.remove('show');
+        }
+        
+        /* ========================================
+           MODAL CLICK HANDLER
+           Close modals when clicking outside
+           ======================================== */
+        window.onclick = function(event) {
+            if (event.target.classList.contains('modal')) {
+                event.target.classList.remove('show');
+            }
+            
+            // Close export dropdowns when clicking outside
+            if (!event.target.closest('.export-dropdown')) {
+                closeExportDropdowns();
+            }
+        }
+    </script>
+</body>
+</html>

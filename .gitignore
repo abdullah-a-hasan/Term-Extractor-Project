@@ -1,0 +1,35 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+test2.py
+test1.py
+test_nlp.py
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+
+# IDE
+.idea/
+
+# Backup files
+backup/
+db/
+
+# spaCy models cache
+.spacy/
+
+# NLTK data
+nltk_data/
+
+# OS files
+.DS_Store
+Thumbs.db
