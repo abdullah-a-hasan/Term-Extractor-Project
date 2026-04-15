@@ -2,6 +2,7 @@
 
 const Progress = {
     STEPS: [
+        "Loading translations",
         "Preparing source terms",
         "Pairing source/target",
         "Sorting candidates",
@@ -62,8 +63,11 @@ const Progress = {
         this._logLinesShown = 0;
         DOM.el('log-output').innerHTML = '';
         DOM.el('main-progress-bar').style.width = '0%';
+        DOM.el('sub-step-bar').style.width = '0%';
         DOM.setText('progress-label', 'Initializing...');
         DOM.setText('progress-pct', '0%');
+        DOM.setText('sub-step-label', '');
+        DOM.setText('sub-step-pct', '0%');
         DOM.setText('elapsed-time', '⏱ 0s');
         DOM.hide('completion-card');
         DOM.hide('error-card');
@@ -100,12 +104,19 @@ const Progress = {
     },
 
     _updateUI(status) {
-        // Progress bar
+        // Main progress bar
         const pct = status.progress_pct || 0;
         DOM.el('main-progress-bar').style.width = pct + '%';
         DOM.setText('progress-pct', pct + '%');
         DOM.setText('progress-label', status.step_name || 'Running...');
         DOM.setText('elapsed-time', `⏱ ${status.elapsed_seconds}s`);
+
+        // Sub-step progress bar
+        const subPct = status.sub_step_pct || 0;
+        const subLabel = status.sub_step_label || '';
+        DOM.el('sub-step-bar').style.width = subPct + '%';
+        DOM.setText('sub-step-pct', subPct + '%');
+        DOM.setText('sub-step-label', subLabel ? `${subLabel}` : '');
 
         if (status.terms_count > 0) {
             DOM.show('terms-found');

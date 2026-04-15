@@ -2,6 +2,23 @@ import time
 
 from term_extractor.magic import Extractor
 
+
+def consume(gen):
+    """Consume a generator, printing status messages and returning the last result."""
+    result = None
+    for msg in gen:
+        msg_type = msg.get("type")
+        if msg_type == "status":
+            print(msg["message"])
+        elif msg_type == "progress":
+            print(f"{msg['label']}: {msg['pct']}%")
+        elif msg_type == "step":
+            print(f"Step {msg['step'] + 1}: {msg['name']}")
+        elif msg_type == "result":
+            result = msg.get("data")
+    return result
+
+
 if __name__ == "__main__":
     start_time = time.time()
     TE = Extractor()
@@ -40,12 +57,12 @@ if __name__ == "__main__":
     data_path = ""
 
     t = time.time()
-    TE.load_translations(f"{data_path}{data_set}", "en", "ar")
+    consume(TE.load_translations(f"{data_path}{data_set}", "en", "ar"))
     elapsed_time = (time.time() - t) / 60
     print(f"Loading time: {elapsed_time} mins")
 
     tar_path = r"C:\Users\blazi\Downloads\temp_conv\term_ext"
-    TE.match_terms(rf"{tar_path}\extracted_terms.xlsx", True,True)
+    consume(TE.match_terms(rf"{tar_path}\extracted_terms.xlsx", True, True))
     duration = time.time() - start_time
     print(f"Duration: {duration / 60} minutes")
     # TODO: PEND - fix HTML decoding, like can&#x27;t (Spanish sample)

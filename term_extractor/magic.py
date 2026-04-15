@@ -82,18 +82,16 @@ class Extractor:
         #self._pred_terms_db_file = None
 
     @staticmethod
-    def _print_progress(label: str, current: float, total: float, every: int = 0):
-        if current == 0 or total == 0:
-            return
-        if every == 0:
-            every = current  # when every is 0, progress prints instantly because mod becomes 0
-        if current % every == 0 or current == total:
-            prog = round((current / total) * 100, 2)
-            print(f"\r{label}: {prog}%", end="")
+    def _progress_msg(label: str, current: int, total: int):
+        """Build a standardized progress dict."""
+        pct = round((current / total) * 100, 2) if total > 0 else 0
+        return {"type": "progress", "label": label, "current": current, "total": total, "pct": pct}
 
     def load_pred_src_terms(self, terms_txt_file: str):
         """
-        Optional. Loads predefined source terms from a file. If used, source terms that are not found in this list will be excluded.
+        Optional. Loads predefined source terms from a file.
+        If used, source terms that are not found in this list will be excluded.
+        Yields status dicts.
         """
         self._pred_terms = set()
         with open(terms_txt_file, newline='', mode='r', encoding='utf-8-sig') as f:
@@ -102,7 +100,7 @@ class Extractor:
                 self._pred_terms.add(line.lower().strip())
         self._use_pred_src_terms = True
         pred_terms_ct = len(self._pred_terms)
-        print(f"\nPredefined terms loaded: {pred_terms_ct}")
+        yield {"type": "status", "message": f"Predefined terms loaded: {pred_terms_ct}"}
 
     @staticmethod
     def _count_csv_lines(csv_file: str):
@@ -156,7 +154,7 @@ class Extractor:
         # unique_src = [] #md5 vals or src rows to avoid duplication
         rows_in_csv = Extractor._count_csv_lines(csv_file)
         pair_count = min([self.max_translation_pairs, rows_in_csv])
-        print(f"\nCSV line count: {rows_in_csv}")
+        yield {"type": "status", "message": f"CSV line count: {rows_in_csv}"}
 
         self._src_col = []  # List of lists. will collect sets of ngrams. [0] will hold the ngrams of the first source sentence. [1] will hold the ngrams of the second source sentence and so on.
         self._tar_col = []  # Same as above
@@ -169,13 +167,14 @@ class Extractor:
         if self.skip_top_common_words > 0:
             self._src_comm_words = set(top_n_list(self._src_lang, self.skip_top_common_words))
             self._tar_comm_words = set(top_n_list(self._tar_lang, self.skip_top_common_words))
-            print("Will exclude common words..")
+            yield {"type": "status", "message": "Will exclude common words.."}
 
         skipped_rows = 0
         processed_rows = 0
         src_nlp = NLPTasks(src_lang, self.src_term_extraction_method)
         tar_nlp = NLPTasks(tar_lang)
-        print("\n\nApplying NLP to translations.")
+        yield {"type": "step", "step": 0, "name": "Loading translations"}
+        yield {"type": "status", "message": "Applying NLP to translations."}
         with open(csv_file, newline='', mode='r', encoding='utf-8-sig') as f:
             for pair in csv.reader(f, dialect="excel"):
                 if len(pair) < 2:
@@ -226,7 +225,8 @@ class Extractor:
                 self._src_col.append(src_tok_phrases)
                 self._tar_col.append(tar_tok_phrases)
 
-                Extractor._print_progress(f"Translation pairs pre-processed ({processed_rows})", processed_rows, rows_in_csv, 100)
+                if processed_rows % 100 == 0:
+                    yield Extractor._progress_msg("Translation pairs pre-processed", processed_rows, rows_in_csv)
 
                 # for tracking slam dunks and sentence length
                 self._src_sents.append(re.sub(f"[{src_nlp.puncts}]$", "", pair[0].lower().strip()))  # for tracking slam dunks
@@ -235,8 +235,8 @@ class Extractor:
                 if processed_rows >= self.max_translation_pairs != 0:
                     break
 
-        Extractor._print_progress(f"Translation pairs pre-processed ({processed_rows})", processed_rows, rows_in_csv)
-        print(f"\nSkipped rows ({skipped_rows}):  {skipped_rows / rows_in_csv * 100:.2f}%")
+        yield Extractor._progress_msg("Translation pairs pre-processed", processed_rows, rows_in_csv)
+        yield {"type": "status", "message": f"Skipped rows ({skipped_rows}): {skipped_rows / rows_in_csv * 100:.2f}%"}
         self._report.update({"total pairs": rows_in_csv, "processed": processed_rows, "skipped pairs": skipped_rows})
 
     def _prep_src_terms(self):
@@ -244,10 +244,11 @@ class Extractor:
         Counts source term candidates and drops those occurring below self.min_source_rep.
         TODO: consider merging source variants (acronyms, singulars & plurals)
         """
-        print("\n\nStep 1: Preparing source terms...")
+        yield {"type": "step", "step": 1, "name": "Preparing source terms"}
         src_terms = {}
         for index, src_phrase_list in enumerate(self._src_col):
-            Extractor._print_progress("Prepping source terms", index, len(self._src_col), 100)
+            if index % 100 == 0:
+                yield Extractor._progress_msg("Prepping source terms", index, len(self._src_col))
             for src_phrase in src_phrase_list:
                 norm_src_phrase = src_phrase.lower()  # normalized src phrase
                 sent_info = (index, len(self._src_sents[index]))  # sentence info (index, length). Shorter sentences will be prioritized later
@@ -262,16 +263,17 @@ class Extractor:
                     src_terms[norm_src_phrase]["sent_info"].append(sent_info)
 
         self._cand_counts = {key: val for key, val in src_terms.items() if val["count"] >= self.min_source_rep}
-        Extractor._print_progress("Prepping source terms", len(self._src_col), len(self._src_col), 100)
+        yield Extractor._progress_msg("Prepping source terms", len(self._src_col), len(self._src_col))
 
     def _pair_src_tar_terms(self):
-        print("\n\nStep 2: Initial pairing of source and target terms...")
+        yield {"type": "step", "step": 2, "name": "Pairing source/target"}
         prog = 0
         src_count = len(self._cand_counts)
         for src_term, src_props in self._cand_counts.items():
             prog += 1
             self._parse_tar_candidates(src_term, src_props)
-            Extractor._print_progress("Pairing", prog, src_count, 100)
+            if prog % 100 == 0:
+                yield Extractor._progress_msg("Pairing", prog, src_count)
 
     def _parse_tar_candidates(self, src_phrase: str, src_props: dict):
         """
@@ -336,15 +338,16 @@ class Extractor:
 
     def _sort_tar_candidates(self):
         # sort and keep top N candidates
-        print("\n\nStep 3: Sorting target candidates...")
+        yield {"type": "step", "step": 3, "name": "Sorting candidates"}
         ct = 0
         pairs_ct = len(self._cand_counts)
         for src_phrase in self._cand_counts:
             ct += 1
             self._cand_counts[src_phrase]['cands'] = dict(
                 sorted(self._cand_counts[src_phrase]['cands'].items(), key=lambda key: key[1]["points"], reverse=True)[0:self.max_1st_cleanup_cand_count])
-            Extractor._print_progress("Sorting target candidates", ct, pairs_ct, 100)
-        Extractor._print_progress("Sorting target candidates", ct, pairs_ct, 100)
+            if ct % 100 == 0:
+                yield Extractor._progress_msg("Sorting target candidates", ct, pairs_ct)
+        yield Extractor._progress_msg("Sorting target candidates", ct, pairs_ct)
 
     def _process_variants_and_partials(self, target_candidates: dict):
         grouped_tar_cands = {}
@@ -390,7 +393,7 @@ class Extractor:
         return dict(sorted(grouped_tar_cands.items(), key=lambda key: key[1]['points'], reverse=True)[0:self.max_grouping_cand_count])
 
     def _candidate_grouping(self):
-        print("\n\nStep 4: Grouping roughly similar target terms...")
+        yield {"type": "step", "step": 4, "name": "Grouping variants"}
         ct = 0
         pairs_ct = len(self._cand_counts)
         for src_phrase in self._cand_counts:
@@ -398,8 +401,9 @@ class Extractor:
             self._cand_counts[src_phrase]['cands'] = self._process_variants_and_partials(self._cand_counts[src_phrase]['cands'])
             if not self.verbose_logging:
                 self._cand_counts[src_phrase].pop('sent_info')
-            Extractor._print_progress("Grouping", ct, pairs_ct, 100)
-        Extractor._print_progress("Grouping", ct, pairs_ct, 100)
+            if ct % 100 == 0:
+                yield Extractor._progress_msg("Grouping", ct, pairs_ct)
+        yield Extractor._progress_msg("Grouping", ct, pairs_ct)
 
     def _fetch_sorted_variants(self, main_variant: str, cand: dict):
         # finds the highest count variant among variants in a target candidate
@@ -416,7 +420,7 @@ class Extractor:
         return src_dets['cands'][first_tar_key].get('slam_dunk', False)
 
     def _index_for_llm(self):
-        print("\n\nStep 4: LLM indexing...")
+        yield {"type": "status", "message": "LLM indexing..."}
         self._temp_phrase_set = set()  # use this initially because it's much faster to add to a look up
         self._llm_phrase_index = None
         self._llm_embs = None
@@ -430,12 +434,13 @@ class Extractor:
             original_phrase = left_info['original']
 
             self._temp_phrase_set.add(original_phrase)
-            Extractor._print_progress("LLM indexing", cur_ct, total_ct, 100)
+            if cur_ct % 100 == 0:
+                yield Extractor._progress_msg("LLM indexing", cur_ct, total_ct)
             right_cands = self._cand_counts[left_val]['cands'].items()
             for right_val, right_info in right_cands:
                 self._temp_phrase_set.add(right_val)
-        Extractor._print_progress("LLM indexing", cur_ct, total_ct, 100)
-        print(f"\nLLM embedding {len(self._temp_phrase_set)} phrases...")
+        yield Extractor._progress_msg("LLM indexing", cur_ct, total_ct)
+        yield {"type": "status", "message": f"LLM embedding {len(self._temp_phrase_set)} phrases..."}
         self._llm_phrase_index = list(self._temp_phrase_set)
         del self._temp_phrase_set
         self.llm = LLMCompare(model=self.model)
@@ -446,17 +451,18 @@ class Extractor:
                                                batch_size=64, pool=pool)
 
     def _score_with_llm(self):
-        self._index_for_llm()
+        yield from self._index_for_llm()
         total_ct = len(self._cand_counts)
         cur_ct = 0
-        print("\n\nStep 5: LLM Scoring...")
+        yield {"type": "step", "step": 5, "name": "LLM Scoring"}
         for left_val, left_info in self._cand_counts.items():
             cur_ct += 1
             #  skip slam dunks to preserve LLM computation
             # if self._is_slam_dunk(left_info):
             #     continue
             original_phrase = left_info['original']
-            Extractor._print_progress("Scoring embeddings", cur_ct, total_ct, 100)
+            if cur_ct % 100 == 0:
+                yield Extractor._progress_msg("Scoring embeddings", cur_ct, total_ct)
             left_vec = self._llm_embs[self._llm_phrase_index.index(original_phrase)]
             right_cands = self._cand_counts[left_val]['cands'].items()
             for right_val, right_info in right_cands:
@@ -468,11 +474,11 @@ class Extractor:
                 if self.verbose_logging:
                     right_info['points_log'].append({"llm_score_pts": llm_score_points})
             self._cand_counts[left_val]['cands'] = dict(sorted(right_cands, key=lambda key: key[1]['points'], reverse=True)[0:self.max_llm_scoring_cand_count])
-        Extractor._print_progress("Scoring embeddings", cur_ct, total_ct, 100)
+        yield Extractor._progress_msg("Scoring embeddings", cur_ct, total_ct)
 
     def _flag_low_scoring_src_terms(self):
         # sort and clean up to N top candidates
-        print("\n\nStep 6: Final cleanup...")
+        yield {"type": "step", "step": 6, "name": "Final cleanup"}
         self._low_scoring_src_terms = []
         ct = 0
         pairs_ct = len(self._cand_counts)
@@ -480,15 +486,16 @@ class Extractor:
             ct += 1
             first_tar = next(iter(src_dets['cands'].values()), None)
             if not first_tar:
-                print(f"No TARGET CANDIDATES FOR '{src_phrase}'")
+                yield {"type": "status", "message": f"No TARGET CANDIDATES FOR '{src_phrase}'"}
                 continue
             #first_tar = src_dets['cands'][next(iter(src_dets['cands'].keys()))]
             # mark candidates not scoring high enough (must fulfil 2 or more conditions to fail)
             if first_tar.get('llm_score', 0) < self.min_llm_score and first_tar['occ_ratio'] < self.min_count_ratio and self._is_slam_dunk(src_dets) is False:
                 self._low_scoring_src_terms.append(src_phrase)
                 src_dets['low_score'] = True
-            Extractor._print_progress("Cleanup", ct, pairs_ct, 100)
-        Extractor._print_progress("Cleanup", ct, pairs_ct, 100)
+            if ct % 100 == 0:
+                yield Extractor._progress_msg("Cleanup", ct, pairs_ct)
+        yield Extractor._progress_msg("Cleanup", ct, pairs_ct)
 
     def _save_excel(self, file_name: str):
         """
@@ -538,8 +545,8 @@ class Extractor:
 
     def match_terms(self, tar_excel: str, json_report: bool = False, html_editor: bool = False, exp_low_score_list: bool = False):
         report = {}
-        self._prep_src_terms()
-        self._pair_src_tar_terms()
+        yield from self._prep_src_terms()
+        yield from self._pair_src_tar_terms()
 
         # discard no-longer necessary lists
         del self._src_col
@@ -547,17 +554,17 @@ class Extractor:
         del self._src_sents
         del self._tar_sents
 
-        self._sort_tar_candidates()
+        yield from self._sort_tar_candidates()
 
-        self._candidate_grouping()
+        yield from self._candidate_grouping()
         if self.llm_scoring:
-            self._score_with_llm()
-        self._flag_low_scoring_src_terms()
+            yield from self._score_with_llm()
+        yield from self._flag_low_scoring_src_terms()
 
         # remove low-scoring terms
         for low_score_term in self._low_scoring_src_terms:
             self._cand_counts.pop(low_score_term)
-        print(f"\n\nCleanup removed {len(self._low_scoring_src_terms)} low-scoring pairs.")
+        yield {"type": "status", "message": f"Cleanup removed {len(self._low_scoring_src_terms)} low-scoring pairs."}
         self._report['terms count'] = len(self._cand_counts)
         self._report['excluded terms'] = len(self._low_scoring_src_terms)
 
@@ -572,7 +579,7 @@ class Extractor:
             # save a full report including low-scoring terms
             with open(Path(tar_excel).with_suffix('.json'), "w", encoding='utf-8') as outfile:
                 json.dump(terms_info, outfile, ensure_ascii=False)
-                print(f"\n\nTotal terms exported: {len(self._cand_counts)}")
+                yield {"type": "status", "message": f"Total terms exported: {len(self._cand_counts)}"}
 
         if html_editor:
             dest_file = Path(tar_excel).parent / "edit-terms.html"
@@ -585,7 +592,7 @@ class Extractor:
                 outfile.close()
 
         self._save_excel(tar_excel)
-        return self._report
+        yield {"type": "result", "data": self._report}
 
 
 if __name__ == '__main__':

@@ -1,6 +1,6 @@
+import os
 import threading
 import time
-import builtins
 
 from term_extractor.magic import Extractor
 
@@ -9,6 +9,7 @@ class ExtractionRunner:
     """Runs Extractor in a background thread and provides status polling."""
 
     STEPS = [
+        "Loading translations",
         "Preparing source terms",
         "Pairing source/target",
         "Sorting candidates",
@@ -17,13 +18,24 @@ class ExtractionRunner:
         "Final cleanup",
     ]
 
+    # Minimum interval (seconds) between appending progress-type log lines
+    _PROGRESS_LOG_THROTTLE = 1.0
+
     def __init__(self):
         self._thread = None
         self._cancelled = False
-        self._status = {
+        self._status = self._empty_status()
+        self._lock = threading.Lock()
+        self._last_progress_log_time = 0.0
+
+    @classmethod
+    def _empty_status(cls):
+        return {
             "step": 0,
             "step_name": "",
             "progress_pct": 0,
+            "sub_step_pct": 0,
+            "sub_step_label": "",
             "log_lines": [],
             "is_running": False,
             "is_complete": False,
@@ -34,8 +46,6 @@ class ExtractionRunner:
             "elapsed_seconds": 0,
             "terms_count": 0,
         }
-        self._lock = threading.Lock()
-        self._original_print = builtins.print
 
     def _log(self, message: str):
         with self._lock:
@@ -43,11 +53,15 @@ class ExtractionRunner:
             if len(self._status["log_lines"]) > 500:
                 self._status["log_lines"] = self._status["log_lines"][-500:]
 
-    def _set_step(self, step_index: int):
+    def _set_step(self, step_index: int, step_name: str = ""):
         with self._lock:
             self._status["step"] = step_index
-            self._status["step_name"] = self.STEPS[step_index] if step_index < len(self.STEPS) else ""
+            self._status["step_name"] = step_name or (
+                self.STEPS[step_index] if step_index < len(self.STEPS) else ""
+            )
             self._status["progress_pct"] = int((step_index / len(self.STEPS)) * 100)
+            self._status["sub_step_pct"] = 0
+            self._status["sub_step_label"] = ""
 
     def _update_elapsed(self):
         if self._status["start_time"]:
@@ -67,40 +81,65 @@ class ExtractionRunner:
             return False
 
         with self._lock:
-            self._status = {
-                "step": 0,
-                "step_name": self.STEPS[0],
-                "progress_pct": 0,
-                "log_lines": [],
-                "is_running": True,
-                "is_complete": False,
-                "is_error": False,
-                "error_msg": "",
-                "result_path": "",
-                "start_time": time.time(),
-                "elapsed_seconds": 0,
-                "terms_count": 0,
-            }
+            self._status = self._empty_status()
+            self._status["step_name"] = self.STEPS[0]
+            self._status["is_running"] = True
+            self._status["start_time"] = time.time()
         self._cancelled = False
+        self._last_progress_log_time = 0.0
 
         self._thread = threading.Thread(target=self._run, args=(config,), daemon=True)
         self._thread.start()
         return True
 
+    # ---- generator message processing ----
+
+    def _process_message(self, msg: dict):
+        """Process a single yielded message dict from the Extractor."""
+        msg_type = msg.get("type")
+
+        if msg_type == "step":
+            step_idx = msg.get("step", 0)
+            step_name = msg.get("name", "")
+            self._set_step(step_idx, step_name)
+            self._log(f"Step {step_idx + 1}: {step_name}")
+
+        elif msg_type == "progress":
+            pct = msg.get("pct", 0)
+            label = msg.get("label", "")
+            now = time.time()
+            with self._lock:
+                self._status["sub_step_pct"] = int(pct)
+                self._status["sub_step_label"] = label
+                # Throttle progress log lines to avoid flooding
+                if now - self._last_progress_log_time >= self._PROGRESS_LOG_THROTTLE:
+                    self._status["log_lines"].append(f"{label}: {pct}%")
+                    if len(self._status["log_lines"]) > 500:
+                        self._status["log_lines"] = self._status["log_lines"][-500:]
+                    self._last_progress_log_time = now
+
+        elif msg_type == "status":
+            self._log(msg.get("message", ""))
+
+        elif msg_type == "result":
+            # Final result — handled by caller
+            pass
+
+    def _consume_generator(self, gen):
+        """Iterate a generator, processing each yielded dict. Returns the last 'result' message or None."""
+        result_data = None
+        for msg in gen:
+            if self._cancelled:
+                break
+            self._process_message(msg)
+            if msg.get("type") == "result":
+                result_data = msg.get("data")
+        return result_data
+
+    # ---- main run logic ----
+
     def _run(self, config: dict):
         """Main extraction logic running in background thread."""
-        original_print = builtins.print
-
-        def custom_print(*args, **kwargs):
-            msg = " ".join(str(a) for a in args)
-            self._log(msg)
-            try:
-                original_print(*args, **kwargs)
-            except Exception:
-                pass
-
-        builtins.print = custom_print
-
         try:
             te = Extractor()
 
@@ -140,7 +179,7 @@ class ExtractionRunner:
             pred_terms_file = config.get("pred_terms_file", "")
             if pred_terms_file:
                 self._log(f"Loading predefined terms from {pred_terms_file}")
-                te.load_pred_src_terms(pred_terms_file)
+                self._consume_generator(te.load_pred_src_terms(pred_terms_file))
 
             csv_file = config["csv_file"]
             src_lang = config["src_lang"]
@@ -148,12 +187,10 @@ class ExtractionRunner:
             output_dir = config["output_dir"]
             output_name = config.get("output_name", "extracted_terms")
 
-            import os
             output_excel = os.path.join(output_dir, f"{output_name}.xlsx")
 
             self._log(f"Loading translations from {csv_file}...")
-            self._set_step(0)
-            te.load_translations(csv_file, src_lang, tar_lang)
+            self._consume_generator(te.load_translations(csv_file, src_lang, tar_lang))
 
             if self._cancelled:
                 self._log("Extraction cancelled.")
@@ -162,44 +199,22 @@ class ExtractionRunner:
                     self._status["is_complete"] = False
                 return
 
-            original_prep = te._prep_src_terms
-            original_pair = te._pair_src_tar_terms
-            original_sort = te._sort_tar_candidates
-            original_group = te._candidate_grouping
-            original_llm = te._score_with_llm
-            original_flag = te._flag_low_scoring_src_terms
-
-            runner = self
-
-            def wrap_step(method, step_idx):
-                def wrapper(*args, **kwargs):
-                    runner._set_step(step_idx)
-                    runner._log(f"Step {step_idx + 1}: {runner.STEPS[step_idx]}...")
-                    result = method(*args, **kwargs)
-                    runner._set_step(step_idx + 1 if step_idx + 1 < len(runner.STEPS) else step_idx)
-                    return result
-                return wrapper
-
-            te._prep_src_terms = wrap_step(original_prep, 0)
-            te._pair_src_tar_terms = wrap_step(original_pair, 1)
-            te._sort_tar_candidates = wrap_step(original_sort, 2)
-            te._candidate_grouping = wrap_step(original_group, 3)
-            te._score_with_llm = wrap_step(original_llm, 4)
-            te._flag_low_scoring_src_terms = wrap_step(original_flag, 5)
-
-            self._log(f"Starting term extraction...")
-            report = te.match_terms(output_excel, json_report=True, html_editor=False)
+            self._log("Starting term extraction...")
+            report = self._consume_generator(
+                te.match_terms(output_excel, json_report=True, html_editor=False)
+            )
 
             if self._cancelled:
                 self._log("Extraction cancelled after completion (result may be partial).")
             else:
                 json_path = os.path.splitext(output_excel)[0] + ".json"
                 terms_count = report.get("terms count", 0) if report else 0
-                self._log(f"\nExtraction complete! Found {terms_count} terms.")
+                self._log(f"Extraction complete! Found {terms_count} terms.")
                 self._log(f"Results saved to: {output_excel}")
                 with self._lock:
                     self._status["is_complete"] = True
                     self._status["progress_pct"] = 100
+                    self._status["sub_step_pct"] = 100
                     self._status["result_path"] = json_path
                     self._status["terms_count"] = terms_count
 
@@ -212,6 +227,5 @@ class ExtractionRunner:
                 self._status["is_error"] = True
                 self._status["error_msg"] = str(e)
         finally:
-            builtins.print = original_print
             with self._lock:
                 self._status["is_running"] = False
