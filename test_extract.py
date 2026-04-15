@@ -11,9 +11,9 @@ def consume(gen):
         if msg_type == "status":
             print(msg["message"])
         elif msg_type == "progress":
-            print(f"\r{msg['label']}: {msg['pct']}%", end="")
+            print(f"{msg['label']}: {msg['pct']}%")
         elif msg_type == "step":
-            print(f"\nStep {msg['step'] + 1}: {msg['name']}")
+            print(f"Step {msg['step'] + 1}: {msg['name']}")
         elif msg_type == "result":
             result = msg.get("data")
     return result

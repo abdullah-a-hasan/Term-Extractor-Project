@@ -107,14 +107,16 @@ class ExtractionRunner:
         elif msg_type == "progress":
             pct = msg.get("pct", 0)
             label = msg.get("label", "")
+            now = time.time()
             with self._lock:
                 self._status["sub_step_pct"] = int(pct)
                 self._status["sub_step_label"] = label
-            # Throttle progress log lines to avoid flooding
-            now = time.time()
-            if now - self._last_progress_log_time >= self._PROGRESS_LOG_THROTTLE:
-                self._log(f"{label}: {pct}%")
-                self._last_progress_log_time = now
+                # Throttle progress log lines to avoid flooding
+                if now - self._last_progress_log_time >= self._PROGRESS_LOG_THROTTLE:
+                    self._status["log_lines"].append(f"{label}: {pct}%")
+                    if len(self._status["log_lines"]) > 500:
+                        self._status["log_lines"] = self._status["log_lines"][-500:]
+                    self._last_progress_log_time = now
 
         elif msg_type == "status":
             self._log(msg.get("message", ""))
