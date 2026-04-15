@@ -20,6 +20,9 @@ const Setup = {
         DOM.on('src-lang', 'change', () => this._checkSpacySupport());
         DOM.on('tar-lang', 'change', () => this._checkSpacySupport());
 
+        // LLM scoring toggle disables/enables dependent controls
+        DOM.on('llm-scoring', 'change', () => this._updateLlmScoringState());
+
         // Advanced panel toggle
         DOM.on('advanced-toggle', 'click', () => {
             const body = DOM.el('advanced-settings');
@@ -27,6 +30,15 @@ const Setup = {
             const collapsed = body.style.display === 'none';
             body.style.display = collapsed ? '' : 'none';
             icon.classList.toggle('collapsed', !collapsed);
+        });
+    },
+
+    _updateLlmScoringState() {
+        const enabled = DOM.checked('llm-scoring');
+        const ids = ['model', 'min-llm-score', 'enable-partial-points'];
+        ids.forEach(id => {
+            const el = DOM.el(id);
+            if (el) el.disabled = !enabled;
         });
     },
 
@@ -79,6 +91,9 @@ const Setup = {
             const method = cfg.src_term_extraction_method || 'ngrams';
             const radio = document.querySelector(`input[name="extraction-method"][value="${method}"]`);
             if (radio) radio.checked = true;
+
+            // Apply initial enabled/disabled state for LLM-dependent fields
+            this._updateLlmScoringState();
         } catch (e) {
             console.error('Failed to load defaults:', e);
         }

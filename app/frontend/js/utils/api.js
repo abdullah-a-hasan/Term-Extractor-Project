@@ -46,6 +46,7 @@ const API = {
     getExtractionStatus: () => API._call('get_extraction_status'),
     getLastResultPath: () => API._call('get_last_result_path'),
     loadTermsJson: (path) => API._call('load_terms_json', [path]),
+    saveTermsJson: (path, data) => API._call('save_terms_json', [path, data]),
     saveSession: (uniqueId, data) => API._call('save_session', [uniqueId, data]),
     loadSession: (uniqueId) => API._call('load_session', [uniqueId]),
     exportToExcel: (terms, path) => API._call('export_to_excel', [terms, path]),

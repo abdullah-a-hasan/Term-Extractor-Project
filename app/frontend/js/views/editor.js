@@ -16,13 +16,17 @@ const Editor = {
     useRegex: false,
 
     _currentCandKey: null,  // Key of term whose candidates modal is open
-    _autoSaveTimer: null,
+    _currentFilePath: null, // Path of currently loaded JSON file
     _loaded: false,
+    _totalPages: 1,
 
     init() {
         this._bindToolbarEvents();
         this._bindPaginationEvents();
         this._bindModalEvents();
+
+        // Save to JSON
+        DOM.on('btn-save-json', 'click', () => this._saveToJson());
 
         // Open JSON from within editor toolbar
         DOM.on('btn-load-json-editor', 'click', async () => {
@@ -44,6 +48,7 @@ const Editor = {
 
     async loadFromPath(path) {
         this._showLoading(true);
+        this._currentFilePath = path;
         try {
             const result = await API.loadTermsJson(path);
             if (!result.success) {
@@ -70,7 +75,10 @@ const Editor = {
             this.fileMetadata.unique_id = null;
             this.fileMetadata.src_lang = null;
             this.fileMetadata.tar_lang = null;
-            this.termsData = jsonData;
+            // Flat format: exclude the embedded session key so it isn't treated as a term entry.
+            // eslint-disable-next-line no-unused-vars
+            const { _editor_session: _ignored, ...rest } = jsonData;
+            this.termsData = rest;
         }
 
         this.deletedTerms = [];
@@ -79,10 +87,16 @@ const Editor = {
         this.sourceFilter = '';
         this.targetFilter = '';
 
-        // Try to restore session
+        // Restore session: prefer embedded _editor_session in the JSON itself,
+        // then fall back to the separate session file (backwards compat).
         let sessionMeta = {};
         let sessionDeleted = [];
-        if (this.fileMetadata.unique_id) {
+
+        if (jsonData._editor_session) {
+            sessionMeta = jsonData._editor_session.metadata || {};
+            sessionDeleted = jsonData._editor_session.deletedTerms || [];
+            DOM.showToast('📂 Restored previous session', 'info');
+        } else if (this.fileMetadata.unique_id) {
             try {
                 const sess = await API.loadSession(this.fileMetadata.unique_id);
                 if (sess.success && sess.data) {
@@ -108,9 +122,21 @@ const Editor = {
         this._updateStats();
         this._updateRecycleCount();
 
+        // Reset filter inputs to match state
+        const sf = DOM.el('filter-source');
+        const tf = DOM.el('filter-target');
+        const rx = DOM.el('filter-regex');
+        if (sf) sf.value = '';
+        if (tf) tf.value = '';
+        if (rx) rx.checked = false;
+
         this._loaded = true;
         DOM.show('editor-content');
         DOM.setText('recycle-count', this.deletedTerms.length);
+
+        // Enable save button
+        const saveBtn = DOM.el('btn-save-json');
+        if (saveBtn) saveBtn.disabled = false;
     },
 
     _buildTermsList(sessionMeta = {}) {
@@ -118,10 +144,12 @@ const Editor = {
             const data = this.termsData[key];
             const meta = sessionMeta[key] || {};
             const topCand = this._getTopCandidate(data.cands);
+            const originalSource = data.original || key;
 
             return {
                 key,
-                source: data.original || key,
+                source: meta.modifiedSource || originalSource,
+                originalSource,
                 target: meta.selectedTarget || (topCand ? topCand.term : ''),
                 originalTarget: topCand ? topCand.term : '',
                 count: data.count || 0,
@@ -163,6 +191,21 @@ const Editor = {
         return (text || '').toLowerCase().includes(pattern.toLowerCase());
     },
 
+    _clearTextFilters() {
+        this.sourceFilter = '';
+        this.targetFilter = '';
+        this.useRegex = false;
+        const sf = DOM.el('filter-source');
+        const tf = DOM.el('filter-target');
+        const rx = DOM.el('filter-regex');
+        if (sf) sf.value = '';
+        if (tf) tf.value = '';
+        if (rx) rx.checked = false;
+        this.currentPage = 1;
+        this._applyFilters();
+        this._renderTable();
+    },
+
     // ==================== Rendering ====================
 
     _renderTable() {
@@ -201,7 +244,7 @@ const Editor = {
         tdNum.className = 'col-num';
         tdNum.textContent = rowNum;
 
-        // Source column
+        // Source column (editable)
         const tdSrc = document.createElement('td');
         tdSrc.className = 'col-source';
         const srcInput = document.createElement('input');
@@ -209,7 +252,14 @@ const Editor = {
         srcInput.className = 'term-input';
         srcInput.value = term.source;
         srcInput.dir = 'auto';
-        srcInput.readOnly = true;
+        srcInput.addEventListener('change', (e) => this._handleSourceEdit(term.key, e.target.value));
+        srcInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                const tarInp = tr.querySelector('.col-target .term-input');
+                if (tarInp) { tarInp.focus(); tarInp.select(); }
+            }
+        });
         tdSrc.appendChild(srcInput);
 
         // Target column
@@ -256,7 +306,7 @@ const Editor = {
 
         const btnDel = document.createElement('button');
         btnDel.className = 'btn-delete';
-        btnDel.textContent = '✗';
+        btnDel.textContent = 'Delete';
         btnDel.title = 'Delete (move to recycle bin)';
         btnDel.addEventListener('click', () => this._deleteTerm(term.key));
 
@@ -275,13 +325,24 @@ const Editor = {
     },
 
     _updatePagination(total, totalPages) {
+        this._totalPages = totalPages;
+        const infoText = `Page ${this.currentPage} of ${totalPages} (${total} terms)`;
         const info = DOM.el('pagination-info');
-        if (info) info.textContent = `Page ${this.currentPage} of ${totalPages} (${total} terms)`;
+        if (info) info.textContent = infoText;
+        const infoTop = DOM.el('pagination-info-top');
+        if (infoTop) infoTop.textContent = infoText;
 
-        const prevBtn = DOM.el('btn-prev-page');
-        const nextBtn = DOM.el('btn-next-page');
-        if (prevBtn) prevBtn.disabled = this.currentPage <= 1;
-        if (nextBtn) nextBtn.disabled = this.currentPage >= totalPages;
+        const atFirst = this.currentPage <= 1;
+        const atLast = this.currentPage >= totalPages;
+
+        ['btn-first-page', 'btn-prev-page', 'btn-first-page-top', 'btn-prev-page-top'].forEach(id => {
+            const el = DOM.el(id);
+            if (el) el.disabled = atFirst;
+        });
+        ['btn-next-page', 'btn-last-page', 'btn-next-page-top', 'btn-last-page-top'].forEach(id => {
+            const el = DOM.el(id);
+            if (el) el.disabled = atLast;
+        });
     },
 
     _updateStats() {
@@ -309,13 +370,27 @@ const Editor = {
 
     // ==================== Term Actions ====================
 
+    _handleSourceEdit(key, newValue) {
+        const term = this.termsList.find(t => t.key === key);
+        if (!term) return;
+        term.source = newValue;
+        // Keep termsData in sync so re-renders and _buildJsonToSave both see the updated value.
+        if (this.termsData[key]) this.termsData[key].original = newValue;
+        term.edited = true;
+        this._updateStats();
+        const tr = document.querySelector(`tr[data-key="${CSS.escape(key)}"]`);
+        if (tr) {
+            tr.classList.remove('row-confirmed', 'row-edited');
+            tr.classList.add('row-edited');
+        }
+    },
+
     _handleTargetEdit(key, newValue) {
         const term = this.termsList.find(t => t.key === key);
         if (!term) return;
         term.target = newValue;
         term.edited = true;
         term.confirmed = false;
-        this._scheduleAutoSave();
         this._updateStats();
         // Update row styling without full re-render
         const tr = document.querySelector(`tr[data-key="${CSS.escape(key)}"]`);
@@ -350,7 +425,6 @@ const Editor = {
             term.confirmed = !term.confirmed;
             if (term.confirmed) term.edited = true;
         }
-        this._scheduleAutoSave();
         this._updateStats();
         // Update row in place
         const tr = document.querySelector(`tr[data-key="${CSS.escape(key)}"]`);
@@ -381,7 +455,6 @@ const Editor = {
         this._renderTable();
         this._updateStats();
         this._updateRecycleCount();
-        this._scheduleAutoSave();
     },
 
     _restoreTerm(key) {
@@ -395,8 +468,27 @@ const Editor = {
         this._renderTable();
         this._updateStats();
         this._updateRecycleCount();
-        this._scheduleAutoSave();
         this._openRecycleBin(); // Refresh modal
+    },
+
+    _clearEdits() {
+        if (!this._loaded) return;
+        if (!confirm('Clear all edits? This will reset all source/target changes, confirmed status, and restore deleted terms.')) return;
+
+        // Restore deleted terms back to termsData
+        this.deletedTerms.forEach(d => {
+            this.termsData[d.key] = d.data;
+        });
+        this.deletedTerms = [];
+
+        // Rebuild with no session metadata (resets to defaults)
+        this._buildTermsList({});
+        this._applyFilters();
+        this._renderTable();
+        this._updateStats();
+        this._updateRecycleCount();
+
+        DOM.showToast('Edits cleared', 'info');
     },
 
     _focusNext(key) {
@@ -448,7 +540,6 @@ const Editor = {
                 const llmScore = data.llm_score !== undefined ? (data.llm_score * 100).toFixed(1) + '%' : '-';
                 const varCount = data.variants ? data.variants.reduce((n, v) => n + Object.keys(v).length, 0) : 0;
 
-                // Use data-cand-key attribute; event listener attached after HTML insertion
                 html += `<tr class="${isSelected ? 'cand-selected' : ''}">
                     <td dir="auto" style="font-weight:600">${this._esc(candTerm)}${isSelected ? ' ✓' : ''}</td>
                     <td>${data.hits || '-'}</td>
@@ -482,7 +573,6 @@ const Editor = {
             html += '</tbody></table>';
             body.innerHTML = html;
 
-            // Attach event listeners programmatically to avoid inline onclick handlers
             body.querySelectorAll('.cand-select-btn[data-cand-key]').forEach(btn => {
                 btn.addEventListener('click', () => this._selectCandidate(btn.dataset.candKey));
             });
@@ -506,7 +596,6 @@ const Editor = {
         term.target = candTerm;
         term.edited = true;
         term.confirmed = false;
-        this._scheduleAutoSave();
         this._updateStats();
         this._renderTable();
         DOM.hide('modal-candidates');
@@ -586,31 +675,64 @@ const Editor = {
         }
     },
 
-    // ==================== Auto-Save ====================
+    // ==================== Save to JSON ====================
 
-    _scheduleAutoSave() {
-        if (this._autoSaveTimer) clearTimeout(this._autoSaveTimer);
-        this._autoSaveTimer = setTimeout(() => this._autoSave(), 2000);
-    },
-
-    async _autoSave() {
-        if (!this.fileMetadata.unique_id) return;
-        const meta = this._buildSessionMeta();
-        const data = {
-            metadata: meta,
-            deletedTerms: this.deletedTerms.map(d => ({ key: d.key, data: d.data, source: d.source, target: d.target })),
-            timestamp: new Date().toISOString()
-        };
+    async _saveToJson() {
+        if (!this._currentFilePath) {
+            DOM.showToast('No file loaded', 'warning');
+            return;
+        }
+        const data = this._buildJsonToSave();
         try {
-            await API.saveSession(this.fileMetadata.unique_id, data);
-            const indicator = DOM.el('autosave-indicator');
-            if (indicator) {
-                indicator.classList.add('visible');
-                setTimeout(() => indicator.classList.remove('visible'), 2000);
+            const result = await API.saveTermsJson(this._currentFilePath, data);
+            if (result.success) {
+                DOM.showToast('💾 Saved to JSON', 'success');
+            } else {
+                DOM.showToast('Save failed: ' + result.error, 'error');
             }
         } catch (e) {
-            console.error('Auto-save failed:', e);
+            DOM.showToast('Save error: ' + e.message, 'error');
         }
+    },
+
+    _buildJsonToSave() {
+        // Build the JSON to write back: current active terms + editor session embedded
+        const termsToSave = {};
+        Object.keys(this.termsData).forEach(key => {
+            termsToSave[key] = { ...this.termsData[key] };
+        });
+
+        // Ensure source edits (t.source) are written to the 'original' field in each
+        // saved term. Note: 'original' stores the user-visible source text; after an
+        // edit it reflects the new value, not the original extracted form.
+        this.termsList.forEach(t => {
+            if (termsToSave[t.key]) {
+                termsToSave[t.key].original = t.source;
+            }
+        });
+
+        const editorSession = {
+            metadata: this._buildSessionMeta(),
+            deletedTerms: this.deletedTerms.map(d => ({
+                key: d.key,
+                data: d.data,
+                source: d.source,
+                target: d.target,
+            })),
+            timestamp: new Date().toISOString(),
+        };
+
+        if (this.fileMetadata.unique_id) {
+            return {
+                unique_id: this.fileMetadata.unique_id,
+                src_lang: this.fileMetadata.src_lang,
+                tar_lang: this.fileMetadata.tar_lang,
+                terms: termsToSave,
+                _editor_session: editorSession,
+            };
+        }
+        // Flat structure (no unique_id) — embed session alongside terms
+        return { ...termsToSave, _editor_session: editorSession };
     },
 
     _buildSessionMeta() {
@@ -622,6 +744,9 @@ const Editor = {
                     confirmed: t.confirmed,
                     selectedTarget: t.target,
                 };
+                if (t.source !== t.originalSource) {
+                    meta[t.key].modifiedSource = t.source;
+                }
             }
         });
         return meta;
@@ -644,6 +769,15 @@ const Editor = {
             this._renderTable();
         });
 
+        // Escape in filter boxes clears all text filters
+        ['filter-source', 'filter-target'].forEach(id => {
+            DOM.on(id, 'keydown', (e) => {
+                if (e.key === 'Escape') this._clearTextFilters();
+            });
+        });
+
+        DOM.on('btn-clear-filters', 'click', () => this._clearTextFilters());
+
         DOM.on('filter-regex', 'change', (e) => {
             this.useRegex = e.target.checked;
             this._applyFilters();
@@ -663,26 +797,27 @@ const Editor = {
             this._renderTable();
         });
 
+        DOM.on('btn-clear-edits', 'click', () => this._clearEdits());
         DOM.on('btn-open-recycle', 'click', () => this._openRecycleBin());
         DOM.on('btn-export-confirmed', 'click', () => this._exportToExcel(true));
         DOM.on('btn-export-all', 'click', () => this._exportToExcel(false));
     },
 
     _bindPaginationEvents() {
-        DOM.on('btn-prev-page', 'click', () => {
-            if (this.currentPage > 1) {
-                this.currentPage--;
-                this._renderTable();
-            }
-        });
+        const goFirst = () => { this.currentPage = 1; this._renderTable(); };
+        const goPrev = () => { if (this.currentPage > 1) { this.currentPage--; this._renderTable(); } };
+        const goNext = () => { if (this.currentPage < this._totalPages) { this.currentPage++; this._renderTable(); } };
+        const goLast = () => { this.currentPage = this._totalPages; this._renderTable(); };
 
-        DOM.on('btn-next-page', 'click', () => {
-            const totalPages = Math.ceil(this.filteredList.length / this.perPage) || 1;
-            if (this.currentPage < totalPages) {
-                this.currentPage++;
-                this._renderTable();
-            }
-        });
+        DOM.on('btn-first-page', 'click', goFirst);
+        DOM.on('btn-prev-page', 'click', goPrev);
+        DOM.on('btn-next-page', 'click', goNext);
+        DOM.on('btn-last-page', 'click', goLast);
+
+        DOM.on('btn-first-page-top', 'click', goFirst);
+        DOM.on('btn-prev-page-top', 'click', goPrev);
+        DOM.on('btn-next-page-top', 'click', goNext);
+        DOM.on('btn-last-page-top', 'click', goLast);
     },
 
     _bindModalEvents() {

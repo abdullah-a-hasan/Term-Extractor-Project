@@ -234,16 +234,6 @@
                                     </div>
 
                                     <div class="form-section-title">LLM Settings</div>
-                                    <div class="form-group">
-                                        <label class="form-label">
-                                            Embedding Model
-                                            <span class="tooltip" data-tip="Sentence transformer model for semantic scoring">ⓘ</span>
-                                        </label>
-                                        <select id="model" class="form-control">
-                                            <option value="LaBSE">LaBSE</option>
-                                            <option value="intfloat/multilingual-e5-base">intfloat/multilingual-e5-base</option>
-                                        </select>
-                                    </div>
                                     <div class="form-group form-toggle">
                                         <label class="form-label">
                                             LLM Scoring
@@ -253,6 +243,16 @@
                                             <input type="checkbox" id="llm-scoring" checked>
                                             <span class="toggle-slider"></span>
                                         </label>
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label">
+                                            Embedding Model
+                                            <span class="tooltip" data-tip="Sentence transformer model for semantic scoring">ⓘ</span>
+                                        </label>
+                                        <select id="model" class="form-control">
+                                            <option value="LaBSE">LaBSE</option>
+                                            <option value="intfloat/multilingual-e5-base">intfloat/multilingual-e5-base</option>
+                                        </select>
                                     </div>
                                     <div class="form-group">
                                         <label class="form-label">
@@ -419,7 +419,43 @@
                         </div>
                         <span id="stat-progress-pct" class="stat-progress-pct">0%</span>
                         <div class="stats-actions">
-                            <span id="autosave-indicator" class="autosave-indicator">✓ Saved</span>
+                            <button class="btn btn-primary btn-sm" id="btn-save-json" disabled>💾 Save to JSON</button>
+                        </div>
+                    </div>
+
+                    <!-- Quick Tips -->
+                    <div id="editor-tips" class="editor-tips">
+                        <strong>💡 Quick Tips:</strong>
+                        • Use text filters to search source/target terms (supports plain text or RegEx)
+                        • Press <kbd>Escape</kbd> in filter boxes to clear all text filters
+                        • Press <kbd>Enter</kbd> in the target field to confirm the term and move to next
+                        • Click 📋 to select from available target candidates and variants
+                        • Click ✓ to confirm a source-target pair (turns green when confirmed)
+                        • Editing source/target or reselecting a candidate removes confirmed status
+                        • Click <strong>💾 Save to JSON</strong> to save all edits back to the loaded file
+                    </div>
+
+                    <!-- Filters -->
+                    <div id="editor-filters" class="editor-filters">
+                        <div class="filter-row">
+                            <div class="filter-field">
+                                <label class="filter-label" for="filter-source">Filter Source Term:</label>
+                                <input type="text" id="filter-source" class="form-control filter-input" placeholder="e.g., doctor, ^med (regex: starts with 'med')">
+                            </div>
+                            <div class="filter-field">
+                                <label class="filter-label" for="filter-target">Filter Target Term:</label>
+                                <input type="text" id="filter-target" class="form-control filter-input" placeholder="e.g., طبيب, .*ال.* (regex)">
+                            </div>
+                            <div class="filter-field filter-field-inline">
+                                <label class="toggle-small" title="Enable regex for filters">
+                                    <input type="checkbox" id="filter-regex">
+                                    <span class="toggle-slider-small"></span>
+                                    <span>Use RegEx</span>
+                                </label>
+                            </div>
+                            <div class="filter-field filter-field-inline">
+                                <button class="btn btn-secondary btn-sm" id="btn-clear-filters">Clear Filters</button>
+                            </div>
                         </div>
                     </div>
 
@@ -427,37 +463,40 @@
                     <div id="editor-toolbar" class="editor-toolbar">
                         <div class="toolbar-filters">
                             <div class="filter-group">
-                                <input type="text" id="filter-source" class="form-control filter-input" placeholder="Filter source...">
-                                <input type="text" id="filter-target" class="form-control filter-input" placeholder="Filter target...">
-                                <label class="toggle-small" title="Enable regex for filters">
-                                    <input type="checkbox" id="filter-regex">
-                                    <span class="toggle-slider-small"></span>
-                                    <span>Regex</span>
-                                </label>
-                            </div>
-                            <div class="filter-group">
+                                <label class="toolbar-label">Filter:</label>
                                 <select id="filter-status" class="form-control filter-select">
-                                    <option value="all">All</option>
-                                    <option value="edited">Edited</option>
-                                    <option value="unedited">Unedited</option>
-                                    <option value="confirmed">Confirmed</option>
-                                    <option value="unconfirmed">Unconfirmed</option>
+                                    <option value="all">All Terms</option>
+                                    <option value="edited">Edited Only</option>
+                                    <option value="unedited">Unedited Only</option>
+                                    <option value="confirmed">Confirmed Only</option>
+                                    <option value="unconfirmed">Unconfirmed Only</option>
                                 </select>
+                                <label class="toolbar-label">Per page:</label>
                                 <select id="per-page" class="form-control filter-select">
-                                    <option value="20">20/page</option>
-                                    <option value="50" selected>50/page</option>
-                                    <option value="100">100/page</option>
-                                    <option value="200">200/page</option>
-                                    <option value="500">500/page</option>
+                                    <option value="20">20</option>
+                                    <option value="50" selected>50</option>
+                                    <option value="100">100</option>
+                                    <option value="200">200</option>
+                                    <option value="500">500</option>
                                 </select>
                             </div>
                         </div>
                         <div class="toolbar-actions">
-                            <button class="btn btn-secondary btn-sm" id="btn-open-recycle">🗑 Deleted (<span id="recycle-count">0</span>)</button>
-                            <button class="btn btn-secondary btn-sm" id="btn-export-confirmed">📥 Export Confirmed</button>
-                            <button class="btn btn-secondary btn-sm" id="btn-export-all">📥 Export All</button>
+                            <button class="btn btn-secondary btn-sm" id="btn-clear-edits">🗑️ Clear Edits</button>
+                            <button class="btn btn-secondary btn-sm" id="btn-open-recycle">♻️ Recycle Bin (<span id="recycle-count">0</span>)</button>
+                            <button class="btn btn-secondary btn-sm" id="btn-export-confirmed">📊 Export Confirmed</button>
+                            <button class="btn btn-secondary btn-sm" id="btn-export-all">📊 Export All</button>
                             <button class="btn btn-ghost btn-sm" id="btn-load-json-editor">📂 Open JSON</button>
                         </div>
+                    </div>
+
+                    <!-- Top Pagination -->
+                    <div id="pagination-bar-top" class="pagination-bar pagination-bar-border-bottom">
+                        <button class="btn btn-ghost btn-sm" id="btn-first-page-top">⏮ First</button>
+                        <button class="btn btn-ghost btn-sm" id="btn-prev-page-top">‹ Prev</button>
+                        <span id="pagination-info-top">Page 1 of 1</span>
+                        <button class="btn btn-ghost btn-sm" id="btn-next-page-top">Next ›</button>
+                        <button class="btn btn-ghost btn-sm" id="btn-last-page-top">Last ⏭</button>
                     </div>
 
                     <!-- Table -->
@@ -477,11 +516,13 @@
                         </table>
                     </div>
 
-                    <!-- Pagination -->
+                    <!-- Bottom Pagination -->
                     <div id="pagination-bar" class="pagination-bar">
+                        <button class="btn btn-ghost btn-sm" id="btn-first-page">⏮ First</button>
                         <button class="btn btn-ghost btn-sm" id="btn-prev-page">‹ Prev</button>
                         <span id="pagination-info">Page 1 of 1</span>
                         <button class="btn btn-ghost btn-sm" id="btn-next-page">Next ›</button>
+                        <button class="btn btn-ghost btn-sm" id="btn-last-page">Last ⏭</button>
                     </div>
                 </div>
             </div>

@@ -178,6 +178,12 @@ class TermExtractorAPI:
         output_dir = self._output_dir or os.path.expanduser("~")
         return file_utils.load_session(output_dir, unique_id)
 
+    def save_terms_json(self, path: str, data: dict) -> dict:
+        """Save edited terms JSON back to the source file."""
+        if not path:
+            return {"success": False, "error": "No path provided"}
+        return file_utils.save_json_file(path, data)
+
     def export_to_excel(self, terms: list, path: str = "") -> dict:
         """Export terms to Excel file."""
         if not path:
