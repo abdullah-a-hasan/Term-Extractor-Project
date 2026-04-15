@@ -18,15 +18,11 @@ class ExtractionRunner:
         "Final cleanup",
     ]
 
-    # Minimum interval (seconds) between appending progress-type log lines
-    _PROGRESS_LOG_THROTTLE = 1.0
-
     def __init__(self):
         self._thread = None
         self._cancelled = False
         self._status = self._empty_status()
         self._lock = threading.Lock()
-        self._last_progress_log_time = 0.0
 
     @classmethod
     def _empty_status(cls):
@@ -86,7 +82,6 @@ class ExtractionRunner:
             self._status["is_running"] = True
             self._status["start_time"] = time.time()
         self._cancelled = False
-        self._last_progress_log_time = 0.0
 
         self._thread = threading.Thread(target=self._run, args=(config,), daemon=True)
         self._thread.start()
@@ -107,16 +102,9 @@ class ExtractionRunner:
         elif msg_type == "progress":
             pct = msg.get("pct", 0)
             label = msg.get("label", "")
-            now = time.time()
             with self._lock:
                 self._status["sub_step_pct"] = int(pct)
                 self._status["sub_step_label"] = label
-                # Throttle progress log lines to avoid flooding
-                if now - self._last_progress_log_time >= self._PROGRESS_LOG_THROTTLE:
-                    self._status["log_lines"].append(f"{label}: {pct}%")
-                    if len(self._status["log_lines"]) > 500:
-                        self._status["log_lines"] = self._status["log_lines"][-500:]
-                    self._last_progress_log_time = now
 
         elif msg_type == "status":
             self._log(msg.get("message", ""))
