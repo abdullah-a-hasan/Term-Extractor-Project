@@ -75,8 +75,9 @@ const Editor = {
             this.fileMetadata.unique_id = null;
             this.fileMetadata.src_lang = null;
             this.fileMetadata.tar_lang = null;
-            // Exclude _editor_session from termsData when loading flat format
-            const { _editor_session, ...rest } = jsonData;
+            // Flat format: exclude the embedded session key so it isn't treated as a term entry.
+            // eslint-disable-next-line no-unused-vars
+            const { _editor_session: _ignored, ...rest } = jsonData;
             this.termsData = rest;
         }
 
@@ -373,6 +374,7 @@ const Editor = {
         const term = this.termsList.find(t => t.key === key);
         if (!term) return;
         term.source = newValue;
+        // Keep termsData in sync so re-renders and _buildJsonToSave both see the updated value.
         if (this.termsData[key]) this.termsData[key].original = newValue;
         term.edited = true;
         this._updateStats();
@@ -700,7 +702,9 @@ const Editor = {
             termsToSave[key] = { ...this.termsData[key] };
         });
 
-        // Flush source edits into the terms data
+        // Ensure source edits (t.source) are written to the 'original' field in each
+        // saved term. Note: 'original' stores the user-visible source text; after an
+        // edit it reflects the new value, not the original extracted form.
         this.termsList.forEach(t => {
             if (termsToSave[t.key]) {
                 termsToSave[t.key].original = t.source;
