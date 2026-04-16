@@ -125,8 +125,8 @@ class TermExtractorAPI:
             save_filename='exported_terms.xlsx',
             file_types=('Excel Files (*.xlsx)', 'All Files (*.*)')
         )
-        if result:
-            return result
+        if result and len(result) > 0:
+            return result[0]
         return ""
 
     def preview_csv(self, path: str) -> dict:
