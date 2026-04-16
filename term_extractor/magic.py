@@ -283,7 +283,7 @@ class Extractor:
         src_hit_counter = 0
         for index, length in sent_info:  # loop based on sentence index and sentence length
             if src_hit_counter >= self.max_source_rep:
-                return
+                break
             src_hit_counter += 1
             src_props['hits'] = src_hit_counter
             tar_cands = self._tar_col[index]
@@ -304,7 +304,6 @@ class Extractor:
                     src_props['cands'][tar_phrase] = {
                         "hits": 1,
                         "points": self.points_per_occurrence,
-                        "occ_ratio": 1 / src_props['hits']
                     }
                     cand_tar_ref = src_props['cands'][tar_phrase]
 
@@ -325,7 +324,6 @@ class Extractor:
                 else:
                     cand_tar_ref["hits"] += 1
                     cand_tar_ref["points"] += self.points_per_occurrence
-                    cand_tar_ref["occ_ratio"] = cand_tar_ref["hits"] / src_props['hits']
                     if self.verbose_logging:
                         cand_tar_ref["points_log"].append({"occurrence_pts": self.points_per_occurrence})
 
@@ -335,6 +333,12 @@ class Extractor:
                     cand_tar_ref["points"] += self.points_per_slam_dunk
                     if self.verbose_logging:
                         cand_tar_ref["points_log"].append({"slam_dunk_pts": self.points_per_slam_dunk})
+
+        # compute occ_ratio once, after all source hits have been counted
+        total_src_hits = src_props.get('hits', 0)
+        if total_src_hits:
+            for cand in src_props['cands'].values():
+                cand['occ_ratio'] = cand['hits'] / total_src_hits
 
     def _sort_tar_candidates(self):
         # sort and keep top N candidates
